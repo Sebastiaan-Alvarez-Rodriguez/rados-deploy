@@ -4,10 +4,12 @@ import subprocess
 from metareserve import Reservation
 
 from designation import Designation
+
+from internal.util.executor import Executor
 import internal.util.fs as fs
 import internal.util.importer as importer
 
-def install_ceph_deploy(location):
+def install_ceph_deploy(location, silent=False):
     '''Install ceph-deploy on the admin node. Warning: Assumes `git` is installed and available.
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Args:
@@ -23,7 +25,11 @@ def install_ceph_deploy(location):
     if not fs.exists(location):
         if subprocess.call('git clone https://github.com/ceph/ceph-deploy', shell=True, cwd=location, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
             return False
-    return subprocess.call('pip3 install . --user', shell=True, cwd=fs.join(location, 'ceph-deploy'), **self.call_opts()) == 0
+    kwargs = {'shell': True}
+    if silent:
+        kwargs['stderr'] = subprocess.DEVNULL
+        kwargs['stdout'] = subprocess.DEVNULL
+    return subprocess.call('pip3 install . --user', cwd=fs.join(location, 'ceph-deploy'), **kwargs) == 0
 
 
 def install_ssh_keys(reservation_str, key, user, use_sudo=True):
@@ -71,8 +77,9 @@ def install_ceph(reservation_str, silent=False):
     '''Installs ceph on all nodes. Requires updated package manager.
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Expects to find a 'designations' extra-info key, with as value a comma-separated string for each node in the reservation, listing its designations. 
-             E.g. node.extra_info['designations'] = 'mon,mds,osd,osd'
-             Note: osd designation may be repeated.
+             Daemons for the given designations will be installed.
+             E.g. node.extra_info['designations'] = 'mon,mds,osd,osd' will install the monitor, metadata-server and osd daemons.
+             Note: Designations may be repeated, without effect.
              Warning: Each node must have at least 1 designation.
     Warning: We assume apt package manager.
     Args:
