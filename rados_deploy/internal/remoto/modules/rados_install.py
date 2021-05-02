@@ -4,10 +4,16 @@ import subprocess
 from metareserve import Reservation
 
 from designation import Designation
-
 from internal.util.executor import Executor
 import internal.util.fs as fs
 import internal.util.importer as importer
+
+
+def stderr(string, *args, **kwargs):
+    kwargs['flush'] = True
+    kwargs['file'] = sys.stderr
+    print('[{}] {}'.format(socket.gethostname(), string), *args, **kwargs)
+
 
 def install_ceph_deploy(location, silent=False):
     '''Install ceph-deploy on the admin node. Warning: Assumes `git` is installed and available.
@@ -32,47 +38,6 @@ def install_ceph_deploy(location, silent=False):
     return subprocess.call('pip3 install . --user', cwd=fs.join(location, 'ceph-deploy'), **kwargs) == 0
 
 
-def install_ssh_keys(reservation_str, key, user, use_sudo=True):
-    '''Adds an SSH entry in the SSH config of this node, for each info.
-    Note: This only has to be executed on 1 node, which will be designated the `ceph admin node`. Executing it on all nodes might be more comfortable, as it allows full n-to-n-to-n-to... jumps.
-    Args:
-        reservation_str (str): String representation of reservation, containing all nodes of the cluster for which we install RADOS-ceph.
-        key (str): Private key to use when connecting to remote. Sending a private key is a little dodgy, until you think: 
-                   This connection is used over SSH, and has equivalent protective  measures as SSL.
-                   There is as much risk involved as entering banking credentials on your (SSL-secured) bank site.
-                   If you know a better way to make n-to-n SSH communication possible, make a pull request.
-        user (str): Username (must be the same for each node).
-        use_sudo (optional bool): If set, also installs SSH keys for the root user.
-
-    Returns:
-        `True` on success, `False` on failure.'''
-    reservation = Reservation.from_string(reservation_str)
-    home = os.path.expanduser('~/')
-
-    fs.mkdir('{}/.ssh'.format(home), exist_ok=True)
-
-    if fs.isfile('{}/.ssh/config'.format(home)):
-        with open('{}/.ssh/config'.format(home)) as f:
-            hosts_available = [line[5:].strip().lower() for line in f.readlines() if line.startswith('Host ')]
-    else:
-        hosts_available = []
-    neededinfo = sorted(list(x for x in reservation.nodes if x.hostname.lower() not in hosts_available), key=lambda x: x.hostname)
-
-    with open('{}/.ssh/rados_deploy.rsa', 'w') as f:
-        f.write(key)
-
-    config = ''.join('''
-Host {0}
-    Hostname {0}
-    User {1}
-    IdentityFile {2}/.ssh/rados_deploy.rsa
-    StrictHostKeyChecking accept-new
-'''.format(x.hostname, user, home) for x in neededinfo)
-    with open('{}/.ssh/config'.format(home), 'a') as f:
-        f.write(config)
-    return subprocess.call('sudo cp {}/.ssh/config /root/.ssh/'.format(home), shell=True) == 0 if use_sudo else True
-
-
 def install_ceph(reservation_str, silent=False):
     '''Installs ceph on all nodes. Requires updated package manager.
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
@@ -92,7 +57,7 @@ def install_ceph(reservation_str, silent=False):
     ceph_deploypath = '{}/.local/bin/ceph-deploy'.format(home)
 
     if any(x for x in reservation.nodes if not 'designations' in x.extra_info):
-        printe('Not every node has required "designations" extra info set.')
+        stderr('Not every node has required "designations" extra info set.')
         return False
 
     kwargs = {'shell': True}
@@ -146,7 +111,7 @@ def install_rados(location, reservation_str, cores=16, silent=False):
     executors += [Executor('scp {}/cpp/build/latest/libparquet* {}:~/'.format(dest, x.hostname), **kwargs) for x in reservation.nodes]
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
-        printe('Could not scp Arrow libraries to all nodes.')
+        stderr('Could not scp Arrow libraries to all nodes.')
         return False
 
     executors = [Executor('ssh {} "sudo cp {}/libcls* /usr/lib/rados-classes/"'.format(x.hostname, home), **kwargs) for x in reservation.nodes]
@@ -155,7 +120,7 @@ def install_rados(location, reservation_str, cores=16, silent=False):
     
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
-        printe('Could not copy libraries to destinations on all nodes.')
+        stderr('Could not copy libraries to destinations on all nodes.')
         return False
 
     libpath = os.getenv('LD_LIBRARY_PATH')
