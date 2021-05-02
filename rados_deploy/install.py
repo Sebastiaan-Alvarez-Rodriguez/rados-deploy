@@ -1,3 +1,4 @@
+import concurrent.futures
 import subprocess
 import tempfile
 
@@ -28,6 +29,13 @@ def _make_keypair():
 
 
 def _pick_admin(reservation, admin=None):
+    '''Picks a ceph admin node.
+    Args:
+        reservation (`metareserve.Reservation`): Reservation object to pick admin from.
+        admin (optional int): If set, picks node with given `node_id`. Picks node with lowest public ip value, otherwise.
+
+    Returns:
+        admin, list of non-admins.'''
     if len(reservation) == 1:
         return next(reservation.nodes), []
 
