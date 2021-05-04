@@ -54,3 +54,8 @@ Host {0}
     with open('{}/.ssh/config'.format(home), 'a') as f:
         f.write(config)
     return subprocess.call('sudo cp {}/.ssh/config /root/.ssh/'.format(home), shell=True) == 0 if use_sudo else True
+
+
+if __name__ == '__channelexec__': # In case we use this module with remoto legacy connections (local, ssh), we need this footer.
+    for item in channel:
+        channel.send(eval(item))

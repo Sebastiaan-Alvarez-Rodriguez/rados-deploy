@@ -183,3 +183,8 @@ def start_cephfs(self):
             printw('Executing ceph-fuse... (attempt {}/60)'.format(y+1))
         time.sleep(1)
     return False
+
+
+if __name__ == '__channelexec__': # In case we use this module with remoto legacy connections (local, ssh), we need this footer.
+    for item in channel:
+        channel.send(eval(item))

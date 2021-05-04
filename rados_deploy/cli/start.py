@@ -1,11 +1,8 @@
 import cli.util as _cli_util
 import start as _start
-from internal.util.printer import *
+
 
 '''CLI module to deploy Spark on a cluster.'''
-
-
-
 
 def subparser(subparsers):
     '''Register subparser modules'''

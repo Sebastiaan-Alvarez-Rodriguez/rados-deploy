@@ -69,3 +69,8 @@ def stop_mdss(self):
 def stop_cephfs(self):
     '''Stops cephfs.'''
     subprocess.call('sudo fusermount -uz /mnt/cephfs', shell=True, **self.call_opts())
+
+
+if __name__ == '__channelexec__': # In case we use this module with remoto legacy connections (local, ssh), we need this footer.
+    for item in channel:
+        channel.send(eval(item))
