@@ -2,15 +2,15 @@ import cli.util as _cli_util
 import start as _start
 
 
-'''CLI module to deploy Spark on a cluster.'''
+'''CLI module to start RADOS-Ceph on a cluster.'''
 
 def subparser(subparsers):
     '''Register subparser modules'''
-    startparser = subparsers.add_parser('start', help='Orchestrate Spark environment on server cluster.')
-    startparser.add_argument('--master', metavar='node', type=int, default=None, help='ID of the node that will be the master node.')
-    startparser.add_argument('--workdir', metavar='path', type=str, default=_start._default_workdir(), help='Path to Spark workdir location for all slave daemons (default={}).'.format(_start._default_workdir()))
-    startparser.add_argument('--silent', help='If set, less boot output is shown.', action='store_true')
-    startparser.add_argument('--retries', metavar='amount', type=int, default=_start._default_retries(), help='Amount of retries to use for risky operations (default={}).'.format(_start._default_retries()))
+    startparser = subparsers.add_parser('start', help='Start RADOS-Ceph environment on server cluster.')
+    # startparser.add_argument('--master', metavar='node', type=int, default=None, help='ID of the node that will be the master node.')
+    # startparser.add_argument('--workdir', metavar='path', type=str, default=_start._default_workdir(), help='Path to Spark workdir location for all slave daemons (default={}).'.format(_start._default_workdir()))
+    # startparser.add_argument('--silent', help='If set, less boot output is shown.', action='store_true')
+    # startparser.add_argument('--retries', metavar='amount', type=int, default=_start._default_retries(), help='Amount of retries to use for risky operations (default={}).'.format(_start._default_retries()))
 
     
     #retries

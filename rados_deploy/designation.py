@@ -1,3 +1,5 @@
+from enum import Enum
+
 class Designation(Enum):
     OSD = 0,
     MON = 1,

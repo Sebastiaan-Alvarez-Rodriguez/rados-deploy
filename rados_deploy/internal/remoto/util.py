@@ -3,7 +3,7 @@ import remoto
 import tempfile
 from internal.remoto.ssh_wrapper import RemotoSSHWrapper as _RemotoSSHWrapper
 import thirdparty.sshconf as sshconf
-
+from internal.util.printer import *
 
 def _get_logger(loggername, loglevel):
     logging.basicConfig()
@@ -28,13 +28,16 @@ def _connection(remote_hostname, silent, loggername, ssh_configpath=None):
         ssh_configpath (optional str): If set, sets execnet ssh config parameters to given path. This way, we can change ssh-based connection behaviour.
 
     Returns:
-        configured `remoto.Connection` object.'''
+        configured `remoto.Connection` object on success, `None` on failure.'''
     kwargs = dict()
     kwargs['logger'] = quiet_logger(loggername) if silent else debug_logger(loggername)
     if ssh_configpath:
         kwargs['ssh_options'] = '-F {}'.format(ssh_configpath)
-    return remoto.Connection(remote_hostname, **kwargs)
-
+    try:
+        return remoto.Connection(remote_hostname, **kwargs)
+    except Exception as e:
+        printe('Could not connect to remote host {}'.format(remote_hostname))
+        return None
 
 def get_ssh_connection(remote_hostname, silent=True, loggername='SilentLogger', ssh_params=None):
     '''Returns a deploy-spark-wrapped execnet connection.

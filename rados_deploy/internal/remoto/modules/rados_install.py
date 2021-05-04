@@ -2,6 +2,7 @@ import builtins
 from enum import Enum
 import importlib
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -9,6 +10,23 @@ import tempfile
 import threading
 import urllib.request
 
+
+
+
+def _ls(directory, only_files=False, only_dirs=False, full_paths=False, *args):
+    ddir = os.path.join(directory, *args)
+    if only_files and only_dirs:
+        raise ValueError('Cannot ls only files and only directories')
+
+    if sys.version_info >= (3, 5): # Use faster implementation in python 3.5 and above
+        with os.scandir(ddir) as it:
+            for entry in it:
+                if (entry.is_dir() and not only_files) or (entry.is_file() and not only_dirs):
+                    yield os.path.join(ddir, entry.name) if full_paths else entry.name
+    else: # Use significantly slower implementation available in python 3.4 and below
+        for entry in os.listdir(ddir):
+            if (isdir(ddir, entry) and not only_files) or (os.path.isfile(ddir, entry) and not only_dirs):
+                yield os.path.join(ddir, entry) if full_paths else entry
 
 ##########################################################################################
 # Here, we copied the contents from designation (as we cannot use local imports)
@@ -117,7 +135,7 @@ class Executor(object):
             x.run()
 
     @staticmethod
-    def __print_errors(returncodes, executors):
+    def _print_errors(returncodes, executors):
         if any(x!=0 for x in returncodes):
             print('Experienced errors:')
             for idx, x in enumerate(returncodes):
@@ -143,12 +161,12 @@ class Executor(object):
                 if stop_on_error: # We had an error during execution and must stop all now
                     Executor.stop_all(executors) # Stop all other executors
                     if print_on_error:
-                        Executor.__print_errors(returncodes, executors)
+                        Executor._print_errors(returncodes, executors)
                     return returncodes if return_returncodes else False
                 else:
                     status = False
         if print_on_error and not status:
-            Executor.__print_errors(returncodes, executors)
+            Executor._print_errors(returncodes, executors)
             
         return returncodes if return_returncodes else status
 
@@ -215,7 +233,7 @@ def _pip_install2(py):
 
 def pip_install(py='python3', pip='pip3'):
     '''Installs pip. The given `pip` argument determines the name of the pip we try to get (`pip` or `pip3`). `py` argument is used when trying to install built-in pip.'''
-    return __pip_installed(pip) or __pip_install0(py) or __pip_install1(py) or __pip_install2(py)
+    return _pip_installed(pip) or _pip_install0(py) or _pip_install1(py) or _pip_install2(py)
 
 
 ##########################################################################################
@@ -262,20 +280,40 @@ def format(string, color):
 
 ##########################################################################################
 
+def _get_ceph_deploy(location, silent=False, retries=5):
+    url = 'https://github.com/ceph/ceph-deploy/archive/refs/heads/master.zip'
+    with tempfile.TemporaryDirectory() as tmpdir: # We use a tempfile to store the downloaded archive.
+        archiveloc = os.path.join(tmpdir, 'ceph-deploy.zip')
+        if not silent:
+            print('Fetching ceph-deploy from {}'.format(url))
+        for x in range(retries):
+            try:
+                try:
+                    os.remove(archiveloc)
+                except Exception as e:
+                    pass
+                urllib.request.urlretrieve(url, archiveloc)
+                break
+            except Exception as e:
+                if x == 0:
+                    printw('Could not download ceph-deploy. Retrying...')
+                elif x == retries-1:
+                    printe('Could not download ceph-deploy: {}'.format(e))
+                    return False
+        try:
+            extractloc = os.path.join(tmpdir, 'extracted')
+            os.makedirs(extractloc, exist_ok=True)
+            shutil.unpack_archive(archiveloc, extractloc)
 
-def _install_metareserve(location, silent=False):
-    if library_exists('metareserve'):
-        return True
-    if not pip_install(py='python3'):
-        return False
-    if not os.path.exists(location):
-        if subprocess.call('git clone https://github.com/Sebastiaan-Alvarez-Rodriguez/metareserve', shell=True, cwd=location, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
+            extracted_dir = next(_ls(extractloc, only_dirs=True, full_paths=True)) # find out what the extracted directory is called. There will be only 1 extracted directory.
+            for x in _ls(extracted_dir, full_paths=True): # Move every file and directory to the final location.
+                shutil.move(x, location)
+            return True
+        except Exception as e:
+            printe('Could not extract ceph-deploy zip file correctly: ', e)
             return False
-    kwargs = {'shell': True}
-    if silent:
-        kwargs['stderr'] = subprocess.DEVNULL
-        kwargs['stdout'] = subprocess.DEVNULL
-    return subprocess.call('pip3 install . --user', cwd=os.path.join(location, 'metareserve'), **kwargs) == 0
+
+        return subprocess.call('{} {}'.format(py, archiveloc), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) == 0
 
 
 def install_ceph_deploy(location, silent=False):
@@ -288,76 +326,70 @@ def install_ceph_deploy(location, silent=False):
         `True` on success, `False` on failure.'''
     if library_exists('ceph_deploy'):
         return True
+    printw('ceph_deploy unregistered')
     if not pip_install(py='python3'):
         return False
 
-    if not os.path.exists(location):
-        if subprocess.call('git clone https://github.com/ceph/ceph-deploy', shell=True, cwd=location, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
+    # https://github.com/ceph/ceph-deploy/archive/refs/heads/master.zip
+    dest = os.path.join(location, 'ceph-deploy')
+
+    if not os.path.exists(dest):
+        if not _get_ceph_deploy(dest, silent=silent):
             return False
     kwargs = {'shell': True}
     if silent:
         kwargs['stderr'] = subprocess.DEVNULL
         kwargs['stdout'] = subprocess.DEVNULL
-    return subprocess.call('pip3 install . --user', cwd=os.path.join(location, 'ceph-deploy'), **kwargs) == 0
+    return subprocess.call('pip3 install . --user', cwd=dest, **kwargs) == 0
 
 
-def install_ceph(location, reservation_str, silent=False):
+def install_ceph(hosts_designations_mapping, silent=False):
     '''Installs ceph on all nodes. Requires updated package manager.
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Expects to find a 'designations' extra-info key, with as value a comma-separated string for each node in the reservation, listing its designations. 
-             Daemons for the given designations will be installed.
-             E.g. node.extra_info['designations'] = 'mon,mds,osd,osd' will install the monitor, metadata-server and osd daemons.
-             Note: Designations may be repeated, without effect.
-             Warning: Each node must have at least 1 designation.
+             Daemons for the given designations will be installed. E.g. node.extra_info['designations'] = 'mon,mds,osd,osd' will install the monitor, metadata-server and osd daemons.
+             Note: Designations may be repeated, which will not change behaviour from listing designations once.
     Warning: We assume apt package manager.
     Args:
-        location (str): Location to install metareserve in. metareserve root will be`location/metareserve`.
-        reservation_str (str): String representation of reservation, containing all nodes of the cluster for which we install RADOS-ceph.
+        hosts_designations_mapping (dict(str, list(str))): Dict with key=hostname and value=list of hostname's `Designations` as strings.
         silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
+    
     Returns:
         `True` on success, `False` on failure.'''
-    if not _install_metareserve(location, silent):
-        return False
-    from metareserve import Reservation
-    reservation = Reservation.from_string(reservation_str)
     home = os.path.expanduser('~/')
     ceph_deploypath = '{}/.local/bin/ceph-deploy'.format(home)
 
-    if any(x for x in reservation.nodes if not 'designations' in x.extra_info):
-        stderr('Not every node has required "designations" extra info set.')
-        return False
-
-    kwargs = {'shell': True}
-        if silent:
-            kwargs['stderr'] = subprocess.DEVNULL
-            kwargs['stdout'] = subprocess.DEVNULL
+    kwargs = {'shell': True, 'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL}
 
     if subprocess.call('sudo apt update -y', **kwargs) != 0:
         return False
 
-
-    executors = [Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, '--'+' --'.join([y.name.lower() for y in set(Designation[d] for d in x.extra_info['designations'].split(','))]), x.hostname), **kwargs) for x in reservation.nodes]
+    executors = []
+    for hostname, des_list in hosts_designations_mapping.items():
+        designations = [Designation[x] for x in des_list]
+        if not any(designations): # If no designation given for node X, we skip installation of Ceph for X.
+            continue
+        designation_out = '--'+' --'.join([x.name.lower() for x in set(designations)])
+        executors.append(Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, designation_out, hostname)))
+    # executors = [Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, '--'+' --'.join([y.name.lower() for y in set(Designation[d] for d in x.extra_info['designations'].split(','))]), x.hostname), **kwargs) for x in reservation.nodes]
     Executor.run_all(executors)
     return Executor.wait_all(executors, print_on_error=True)
 
 
-def install_rados(location, reservation_str, cores=16, silent=False):
+def install_rados(location, hosts, silent=False, cores=16):
     '''Installs RADOS-arrow, which we need for bridging with Arrow. This function should be executed from the admin node. 
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Assumes apt package manager.
     Args:
         location (str): Location to install RADOS-arrow in. Ceph-deploy root will be`location/ceph-deploy`.
-        reservation_str (str): String representation of reservation, containing all nodes of the cluster for which we install RADOS-ceph.
+        hosts (list(str)): List of hostnames of this cluster to install ceph on.
         cores (optional int): Number of cores to use for compiling (default=4). 
                               Note: Do not set this to a higher value than the number of available cores, as it would only lead to slowdowns.
                                     If set too high, it may happen that RAM consumption is much too high, leading to kernel panic and termination of critical processes.
         silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
     Returns:
         `True` on success, `False` on failure.'''
-    if not _install_metareserve(location, silent):
-        return False
-    from metareserve import Reservation
-    reservation = Reservation.from_string(reservation_str)
+
     home = os.path.expanduser('~/')
     dest = os.path.join(location, 'arrow')
 
@@ -376,17 +408,17 @@ def install_rados(location, reservation_str, cores=16, silent=False):
         if subprocess.call('sudo make install -j{}'.format(cores), cwd='{}/cpp'.format(dest), **kwargs) != 0:
             return False
 
-    executors = [Executor('scp {}/cpp/build/latest/libcls* {}:~/'.format(dest, x.hostname), **kwargs) for x in reservation.nodes]
-    executors += [Executor('scp {}/cpp/build/latest/libarrow* {}:~/'.format(dest, x.hostname), **kwargs) for x in reservation.nodes]
-    executors += [Executor('scp {}/cpp/build/latest/libparquet* {}:~/'.format(dest, x.hostname), **kwargs) for x in reservation.nodes]
+    executors = [Executor('scp {}/cpp/build/latest/libcls* {}:~/'.format(dest, x), **kwargs) for x in hosts]
+    executors += [Executor('scp {}/cpp/build/latest/libarrow* {}:~/'.format(dest, x), **kwargs) for x in hosts]
+    executors += [Executor('scp {}/cpp/build/latest/libparquet* {}:~/'.format(dest, x), **kwargs) for x in hosts]
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
         stderr('Could not scp Arrow libraries to all nodes.')
         return False
 
-    executors = [Executor('ssh {} "sudo cp {}/libcls* /usr/lib/rados-classes/"'.format(x.hostname, home), **kwargs) for x in reservation.nodes]
-    executors += [Executor('ssh {} "sudo cp {}/libarrow* /usr/lib/"'.format(x.hostname, home), **kwargs) for x in reservation.nodes]
-    executors += [Executor('ssh {} "sudo cp {}/libparquet* /usr/lib/"'.format(x.hostname, home), **kwargs) for x in reservation.nodes]
+    executors = [Executor('ssh {} "sudo cp {}/libcls* /usr/lib/rados-classes/"'.format(x, home), **kwargs) for x in hosts]
+    executors += [Executor('ssh {} "sudo cp {}/libarrow* /usr/lib/"'.format(x, home), **kwargs) for x in hosts]
+    executors += [Executor('ssh {} "sudo cp {}/libparquet* /usr/lib/"'.format(x, home), **kwargs) for x in hosts]
     
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
