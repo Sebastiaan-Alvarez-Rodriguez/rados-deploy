@@ -14,7 +14,7 @@ def already_installed(privkey_sha256):
         `True` if the SSH keys are already installed.'''
     home = os.path.expanduser('~/')
     keyfile = '{}/.ssh/rados_deploy.rsa'.format(home)
-    if not os.path.isfile(keyfile):
+    if not isfile(keyfile):
         return False
 
     if privkey_sha256 == None:
@@ -43,8 +43,8 @@ def install_ssh_keys(hosts, keypair, user, use_sudo=True):
         `True` on success, `False` on failure.'''
     home = os.path.expanduser('~/')
 
-    os.makedirs('{}/.ssh'.format(home), exist_ok=True)
-    if os.path.isfile('{}/.ssh/config'.format(home)):
+    mkdir('{}/.ssh'.format(home), exist_ok=True)
+    if isfile('{}/.ssh/config'.format(home)):
         with open('{}/.ssh/config'.format(home)) as f:
             hosts_available = [line[5:].strip().lower() for line in f.readlines() if line.startswith('Host ')]
     else:
@@ -71,10 +71,8 @@ Host {0}
 
     with open('{}/.ssh/rados_deploy.rsa'.format(home), 'w') as f:
         f.write(keypair[0])
+    with open('{}/.ssh/rados_deploy.rsa.pub'.format(home), 'w') as f:
+        f.write(keypair[1])
+    os.chmod('{}/.ssh/rados_deploy.rsa'.format(home), 0o600)
 
     return subprocess.call('sudo cp {}/.ssh/config /root/.ssh/'.format(home), shell=True) == 0 if use_sudo else True
-
-
-if __name__ == '__channelexec__': # In case we use this module with remoto legacy connections (local, ssh), we need this footer.
-    for item in channel:
-        channel.send(eval(item))

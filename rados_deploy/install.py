@@ -4,9 +4,10 @@ import subprocess
 import tempfile
 
 from designation import Designation
-import internal.remoto.modules.ssh_install as _ssh_install
-import internal.remoto.modules.rados_install as _rados_install
+from internal.remoto.modulegenerator import ModuleGenerator
 from internal.remoto.util import get_ssh_connection as _get_ssh_connection
+import internal.util.fs as fs
+import internal.util.importer as importer
 from internal.util.printer import *
 
 
@@ -19,21 +20,60 @@ def _default_retries():
 def _default_use_sudo():
     return False
 
-def _install_rados(connection, reservation, installdir, silent=False, cores=_default_cores()):
-    remote_module = connection.import_module(_rados_install)
+def _install_rados(connection, module, reservation, installdir, silent=False, cores=_default_cores()):
+    remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
     if not remote_module.install_ceph_deploy(installdir, silent):
         printe('Could not install ceph-deploy.')
         return False
-    if not remote_module.install_ceph({x.hostname: [str(Designation[y.strip().upper()]) for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}, silent):
+    hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
+    if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install ceph on some node(s).')
         return False
-    if not remote_module.install_rados(installdir, hosts, silent, cores):
+    if not remote_module.install_rados(installdir, hosts_designations_mapping, silent, cores):
         printe('Could not install RADOS-ceph on some node(s).')
         return False
     prints('Installed RADOS-ceph.')
     return True
+
+
+def _installed_ssh(connection, module, keypair=None):
+    remote_module = connection.import_module(module)
+    privkey_sha256 = hashlib.sha256(bytes(keypair[0])).hexdigest() if keypair else None
+    return remote_module.already_installed(privkey_sha256)
+
+
+def _install_ssh(connection, module, reservation, keypair, user, use_sudo=True):
+    remote_module = connection.import_module(module)
+    return remote_module.install_ssh_keys([x.hostname for x in reservation.nodes], keypair, user, use_sudo)
+
+
+def _generate_module_ssh(silent=False):
+    '''Generates SSH-install module from available sources.'''
+    generation_loc = fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'generated', 'install_ssh.py')
+    files = [
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'printer.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'printer.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'ssh_install.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'remoto_base.py'),
+    ]
+    ModuleGenerator().with_module(fs).with_files(*files).generate(generation_loc, silent)
+    return importer.import_full_path(generation_loc)
+
+
+def _generate_module_rados(silent=False):
+    '''Generates Spark-install module from available sources.'''
+    generation_loc = fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'generated', 'install_rados.py')
+    files = [
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'printer.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'printer.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'executor.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'rados_install.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'remoto_base.py'),
+    ]
+    ModuleGenerator().with_modules(fs, importer).with_files(*files).generate(generation_loc, silent)
+    return importer.import_full_path(generation_loc)
 
 
 def _make_keypair():
@@ -72,17 +112,6 @@ def _check_users(reservation):
     return not any(x for x in nodes[1:] if x.extra_info['user'] != known_user)
 
 
-def _installed_ssh(connection, keypair=None):
-    remote_module = connection.import_module(_ssh_install)
-    privkey_sha256 = hashlib.sha256(bytes(keypair[0])).hexdigest() if keypair else None
-    return remote_module.already_installed(privkey_sha256)
-
-
-def _install_ssh(connection, reservation, keypair, user, use_sudo=True):
-    remote_module = connection.import_module(_ssh_install)
-    return remote_module.install_ssh_keys([x.hostname for x in reservation.nodes], keypair, user, use_sudo)
-
-
 def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, use_sudo=_default_use_sudo()):
     '''Installs ssh keys in the cluster for internal traffic.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
@@ -107,7 +136,9 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         futures_connection = {x: executor.submit(_get_ssh_connection, x.ip_public, silent=silent, ssh_params=ssh_kwargs) for x in reservation.nodes}
         connectionwrappers = {node: future.result() for node, future in futures_connection.items()}
         
-        futures_ssh_installed = {node: executor.submit(_installed_ssh, wrapper.connection, keypair=cluster_keypair) for node, wrapper in connectionwrappers.items()}
+        ssh_module = _generate_module_ssh()
+
+        futures_ssh_installed = {node: executor.submit(_installed_ssh, wrapper.connection, ssh_module, keypair=cluster_keypair) for node, wrapper in connectionwrappers.items()}
         do_install = False
         for node, ssh_future in futures_ssh_installed.items():
             if not ssh_future.result():
@@ -117,7 +148,7 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
             internal_keypair = cluster_keypair
             if not internal_keypair:
                 internal_keypair = _make_keypair()
-            futures_ssh_install = {node: executor.submit(_install_ssh, wrapper.connection, reservation, internal_keypair, user, use_sudo=use_sudo) for node, wrapper in connectionwrappers.items()}
+            futures_ssh_install = {node: executor.submit(_install_ssh, wrapper.connection, ssh_module, reservation, internal_keypair, user, use_sudo=use_sudo) for node, wrapper in connectionwrappers.items()}
             state_ok = True
             for node, ssh_future in futures_ssh_install.items():
                 if not ssh_future.result():
@@ -157,4 +188,5 @@ def install(reservation, installdir, key_path=None, admin_id=None, cluster_keypa
         return False
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
-    return _install_rados(connection.connection, reservation, installdir, silent=silent, cores=cores)
+    rados_module = _generate_module_rados()
+    return _install_rados(connection.connection, rados_module, reservation, installdir, silent=silent, cores=cores)
