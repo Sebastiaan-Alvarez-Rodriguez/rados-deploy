@@ -38,7 +38,39 @@ def _get_ceph_deploy(location, silent=False, retries=5):
             printe('Could not extract ceph-deploy zip file correctly: ', e)
             return False
 
-        return subprocess.call('{} {}'.format(py, archiveloc), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) == 0
+
+def _get_rados_dev(location, silent=False, retries=5):
+    url = 'https://github.com/Sebastiaan-Alvarez-Rodriguez/arrow/archive/refs/heads/merge_bridge_dev.zip'
+    with tempfile.TemporaryDirectory() as tmpdir: # We use a tempfile to store the downloaded archive.
+        archiveloc = join(tmpdir, 'rados-arrow.zip')
+        if not silent:
+            print('Fetching RADOS-arrow from {}'.format(url))
+        for x in range(retries):
+            try:
+                try:
+                    rm(archiveloc)
+                except Exception as e:
+                    pass
+                urllib.request.urlretrieve(url, archiveloc)
+                break
+            except Exception as e:
+                if x == 0:
+                    printw('Could not download RADOS-arrow. Retrying...')
+                elif x == retries-1:
+                    printe('Could not download RADOS-arrow: {}'.format(e))
+                    return False
+        try:
+            extractloc = join(tmpdir, 'extracted')
+            os.makedirs(extractloc, exist_ok=True)
+            shutil.unpack_archive(archiveloc, extractloc)
+
+            extracted_dir = next(ls(extractloc, only_dirs=True, full_paths=True)) # find out what the extracted directory is called. There will be only 1 extracted directory.
+            for x in ls(extracted_dir, full_paths=True): # Move every file and directory to the final location.
+                mv(x, location)
+            return True
+        except Exception as e:
+            printe('Could not extract RADOS-arrow zip file correctly: ', e)
+            return False
 
 
 def install_ceph_deploy(location, silent=False):
@@ -56,16 +88,15 @@ def install_ceph_deploy(location, silent=False):
         return False
 
     # https://github.com/ceph/ceph-deploy/archive/refs/heads/master.zip
-    dest = join(location, 'ceph-deploy')
 
-    if not exists(dest):
-        if not _get_ceph_deploy(dest, silent=silent):
+    if not exists(location):
+        if not _get_ceph_deploy(location, silent=silent):
             return False
     kwargs = {'shell': True}
     if silent:
         kwargs['stderr'] = subprocess.DEVNULL
         kwargs['stdout'] = subprocess.DEVNULL
-    return subprocess.call('pip3 install . --user', cwd=dest, **kwargs) == 0
+    return subprocess.call('pip3 install . --user', cwd=location, **kwargs) == 0
 
 
 def install_ceph(hosts_designations_mapping, silent=False):
@@ -82,8 +113,7 @@ def install_ceph(hosts_designations_mapping, silent=False):
     
     Returns:
         `True` on success, `False` on failure.'''
-    home = os.path.expanduser('~/')
-    ceph_deploypath = join(home, '.local', 'bin', 'ceph-deploy')
+    ceph_deploypath = join(os.path.expanduser('~/'), '.local', 'bin', 'ceph-deploy')
 
     kwargs = {'shell': True, 'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL}
 
@@ -113,23 +143,19 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
         silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
     Returns:
         `True` on success, `False` on failure.'''
-
-    home = os.path.expanduser('~/')
-    dest = join(location, 'arrow')
-
     kwargs = {'shell': True}
     if silent:
         kwargs['stderr'] = subprocess.DEVNULL
         kwargs['stdout'] = subprocess.DEVNULL
 
-    if not exists('{}/cpp/build/latest'.format(dest)):
+    if not exists('{}/cpp/build/latest'.format(location)):
         if subprocess.call('sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk openjdk-11-jdk libboost-all-dev automake bison flex g++ git libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y 1>&2', **kwargs) != 0:
             return False
-        if (not isdir(dest)) and subprocess.call('git clone https://github.com/Sebastiaan-Alvarez-Rodriguez/arrow.git -b merge_bridge_dev', cwd=location, **kwargs) != 0:
+        if (not isdir(location)) and not _get_rados_dev(location, silent=silent, retries=5):
             return False
-        if subprocess.call('cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON 1>&2', cwd='{}/cpp'.format(dest), **kwargs) != 0:
+        if subprocess.call('cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON 1>&2', cwd='{}/cpp'.format(location), **kwargs) != 0:
             return False
-        if subprocess.call('sudo make install -j{} 1>&2'.format(cores), cwd='{}/cpp'.format(dest), **kwargs) != 0:
+        if subprocess.call('sudo make install -j{} 1>&2'.format(cores), cwd='{}/cpp'.format(location), **kwargs) != 0:
             return False
 
     hosts = [key for key, value in hosts_designations_mapping.items() if any(value)] # Only nodes joining the ceph cluster will receive the libraries
@@ -139,9 +165,9 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
     if not Executor.wait_all(executors, print_on_error=True):
         printe('Could not create required directories on all nodes.')
         return False
-    executors = [Executor('scp {}/cpp/build/latest/libcls* {}:~/.arrow-libs/'.format(dest, x), **kwargs) for x in hosts]
-    executors += [Executor('scp {}/cpp/build/latest/libarrow* {}:~/.arrow-libs/'.format(dest, x), **kwargs) for x in hosts]
-    executors += [Executor('scp {}/cpp/build/latest/libparquet* {}:~/.arrow-libs/'.format(dest, x), **kwargs) for x in hosts]
+    executors = [Executor('scp {}/cpp/build/latest/libcls* {}:~/.arrow-libs/'.format(location, x), **kwargs) for x in hosts]
+    executors += [Executor('scp {}/cpp/build/latest/libarrow* {}:~/.arrow-libs/'.format(location, x), **kwargs) for x in hosts]
+    executors += [Executor('scp {}/cpp/build/latest/libparquet* {}:~/.arrow-libs/'.format(location, x), **kwargs) for x in hosts]
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
         printe('Could not scp Arrow libraries to all nodes.')
@@ -158,7 +184,7 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
 
     libpath = os.getenv('LD_LIBRARY_PATH') # TODO: Environment variables must be set using Environment class for cross-connection consistency.
     if libpath == None or not '/usr/local/lib' in libpath.strip().split(':'):
-        with open('{}/.bashrc'.format(home), 'a') as f:
+        with open(join(os.path.expanduser('~/'), '.bashrc'), 'a') as f:
             if libpath == None:
                 f.write('export LD_LIBRARY_PATH=/usr/local/lib\n')
             else:

@@ -74,9 +74,10 @@ class ModuleGenerator(object):
         return name in self._stl_modules_cache
 
 
-    def _read_imports(self, silent=False):
-        '''Reads imports from all files. Non-stl python libraries are skipped.
+    def _read_imports(self, allowed_imports=None, silent=False):
+        '''Reads imports from all files. Non-stl python libraries are skipped, except those specifically allowed in `allowed_imports`.
         Args:
+            allowed_imports (optional iterable(str)): If set to an iterable, does not remove given import statements.
             silent (optional bool): If set, prints warnings about found non-stl python libraries.
 
         Returns:
@@ -87,6 +88,8 @@ class ModuleGenerator(object):
         found_stl_imports = set()
         found_stl_import_froms = set()
 
+        allowed_set = set(allowed_imports) if allowed_imports else None
+
         for x in self._files:
             with open(x, 'r') as f:
                 lines = f.read()
@@ -95,7 +98,7 @@ class ModuleGenerator(object):
                     matchtuple = match.groups()
                     match_importmodule = matchtuple[0]
 
-                    if not self._is_regular_python(match_importmodule):
+                    if (not self._is_regular_python(match_importmodule)) or (allowed_set and match_importmodule in allowed_set):
                         if not silent:
                             printw('(file: {}) Found non-regular import "{}".'.format(x, match_importmodule))
                     else:
@@ -118,13 +121,20 @@ class ModuleGenerator(object):
             return '\n'.join(x.group(0) for x in regex_no_import.finditer(lines))
 
 
-    def generate(self, outputpath, silent=False):
+    def generate(self, outputpath, allowed_imports=None, silent=False):
+        '''Generates the final, non-stl dependency-free module to be used with Remoto remote module execution. 
+        Captures all import commands and ensures they are present only once for the entire module.
+        Warning: Removes all non-stl import statements.
+        Args:
+            outputpath (str): Location to store module, including output filename. Creates every directory  that does not exist.
+            allowed_imports (optional iterable(str)): If set to an iterable, does not remove given import statements.
+            silent (optional bool): If set, skips printing warnings when non-standard imports are encountered.'''
         dest_dir = fs.dirname(outputpath)
         if not fs.isdir(dest_dir):
             fs.mkdir(dest_dir, exist_ok=True)
 
 
-        stl_imports, stl_imports_from = self._read_imports(silent=silent)
+        stl_imports, stl_imports_from = self._read_imports(allowed_imports=allowed_imports, silent=silent)
         with open(outputpath, 'w') as f:
             header = '''
 

@@ -8,6 +8,7 @@ from internal.remoto.modulegenerator import ModuleGenerator
 from internal.remoto.util import get_ssh_connection as _get_ssh_connection
 import internal.util.fs as fs
 import internal.util.importer as importer
+import internal.util.location as loc
 from internal.util.printer import *
 
 
@@ -24,14 +25,14 @@ def _install_rados(connection, module, reservation, installdir, silent=False, co
     remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
-    if not remote_module.install_ceph_deploy(installdir, silent):
+    if not remote_module.install_ceph_deploy(loc.cephdeploydir(installdir), silent):
         printe('Could not install ceph-deploy.')
         return False
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
     if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install ceph on some node(s).')
         return False
-    if not remote_module.install_rados(installdir, hosts_designations_mapping, silent, cores):
+    if not remote_module.install_rados(loc.arrowdir(installdir), hosts_designations_mapping, silent, cores):
         printe('Could not install RADOS-ceph on some node(s).')
         return False
     prints('Installed RADOS-ceph.')
@@ -63,7 +64,7 @@ def _generate_module_ssh(silent=False):
 
 
 def _generate_module_rados(silent=False):
-    '''Generates Spark-install module from available sources.'''
+    '''Generates RADOS-arrow-install module from available sources.'''
     generation_loc = fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'generated', 'install_rados.py')
     files = [
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'printer.py'),
@@ -116,8 +117,8 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
     '''Installs ssh keys in the cluster for internal traffic.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
-        reservation (`metareserve.Reservation`): Reservation object with all nodes to install Spark on.
-        installdir (str): Location on remote host to install Spark in.
+        reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
+        installdir (str): Location on remote host to install RADOS-Ceph in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
         silent (optional bool): If set, does not print so much info.
@@ -163,14 +164,14 @@ def install(reservation, installdir, key_path=None, admin_id=None, cluster_keypa
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
-        reservation (`metareserve.Reservation`): Reservation object with all nodes to install Spark on.
-        installdir (str): Location on remote host to install Spark in.
+        reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
+        installdir (str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
         cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
         silent (optional bool): If set, does not print so much info.
         cores (optional int): Number of cores to compile RADOS-arrow with.
-    
+
     Returns:
         `True` on success, `False` otherwise.'''
     if not _check_users(reservation):

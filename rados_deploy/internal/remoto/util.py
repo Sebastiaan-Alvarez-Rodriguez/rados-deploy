@@ -1,7 +1,7 @@
 import logging
 import remoto
 import tempfile
-from internal.remoto.ssh_wrapper import RemotoSSHWrapper as _RemotoSSHWrapper
+from internal.remoto.ssh_wrapper import RemotoSSHWrapper
 import thirdparty.sshconf as sshconf
 from internal.util.printer import *
 
@@ -56,5 +56,5 @@ def get_ssh_connection(remote_hostname, silent=True, loggername='SilentLogger', 
         conf.add(remote_hostname, **ssh_params)
         tmpfile = tempfile.NamedTemporaryFile()
         conf.write(tmpfile.name)
-        return _RemotoSSHWrapper(_connection(remote_hostname, silent, loggername, ssh_configpath=tmpfile.name), ssh_config=tmpfile)
-    return _RemotoSSHWrapper(_connection(remote_hostname, silent, loggername))
+        return RemotoSSHWrapper(_connection(remote_hostname, silent, loggername, ssh_configpath=tmpfile.name), ssh_config=tmpfile)
+    return RemotoSSHWrapper(_connection(remote_hostname, silent, loggername))

@@ -1,30 +1,33 @@
 import subprocess
+import concurrent.futures
+
+def get_subprocess_kwargs(silent):
+    if silent:
+        return {'shell': True, 'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL}
+    return {'shell': True}
 
 
-def create_monitors(self):
-    '''Creates new monitor nodes.'''
-    cmd = '{} new {}'.format(self.ceph_deploypath, ' '.join(x.name for x in self.monitors))
-    return subprocess.call(cmd, shell=True, **self.call_opts()) == 0
+def send_config_keys(nodes, ceph_deploypath, silent):
+    '''Pushes configuration and client.admin.key to given hosts.
+    Args:
+        nodes (iterable(str)): Iterable of hostnames to push config to.
+        ceph_deploypath (str): Path to ceph-deploy binary.
+        silent (bool): If set, prints less output.
+
+    Returns:
+        `True` on success, `False` otherwise.'''
+    cmd = '{} --overwrite-conf admin {}'.format(ceph_deploypath, ' '.join(x.name for x in nodes))
+    return subprocess.call(cmd, **get_subprocess_kwargs(silent)) == 0
 
 
-def start_monitors(self):
-    '''Start monitor nodes.'''
-    cmd = '{} --overwrite-conf mon create-initial'.format(self.ceph_deploypath)
-    if not subprocess.call(cmd, shell=True, **self.call_opts()) == 0:
-        return False
-    cmd = '{} --overwrite-conf admin {}'.format(self.ceph_deploypath, ' '.join(x.name for x in set(self.monitors).union(set(self.managers))))
-    return subprocess.call(cmd, shell=True, **self.call_opts()) == 0
+def send_config(nodes, ceph_deploypath, silent):
+    cmd = '{} --overwrite-conf config push {}'.format(ceph_deploypath, ' '.join(x.name for x in nodes))
+    return subprocess.call(cmd, get_subprocess_kwargs(silent)) == 0
 
 
-def start_managers(self):
-    '''Create and start manager nodes.'''
-    cmd = '{} --overwrite-conf mgr create {}'.format(self.ceph_deploypath, ' '.join(x.name for x in self.managers))
-    return subprocess.call(cmd, shell=True, **self.call_opts()) == 0
-
-
-def update_config(self):
+def update_config(nodes, ceph_deploypath, silent):
     '''Edit ceph.config and push it to all nodes. By default, the config is found in admin home directory.'''
-    path = '/users/{}/ceph.conf'.format(self.admin.user)
+    path = '{}/ceph.conf'.format(maindir())
 
     rules = {
         'mon allow pool delete': 'true',
@@ -42,7 +45,8 @@ def update_config(self):
         parser.optionxform=str
         parser.read(path)
 
-        print('Checking existing file ({}) for conflicting rules...'.format(path))
+        if not silent:
+            print('Checking existing file ({}) for conflicting rules...'.format(path))
         
         for key in parser['global']:
             if key in rules and parser['global'][key] != rules[key]: # Rule is present in current file, with incorrect value
@@ -54,23 +58,20 @@ def update_config(self):
     with open(path, 'w') as file:
         parser.write(file)
 
-    cmd = '{} --overwrite-conf config push {}'.format(self.ceph_deploypath, ' '.join(x.name for x in self.nodes))
-    if subprocess.call(cmd, shell=True, **self.call_opts()) != 0:
+    if not send_config(nodes, ceph_deploypath, silent):
         return False
 
-    executors = [Executor('ssh {} "sudo systemctl restart ceph-mon.target"'.format(x.name), shell=True, **self.call_opts()) for x in self.monitors] # Restart monitors, as their config has been updated and they already run.
-    Executor.run_all(executors)
-    if not Executor.wait_all(executors, print_on_error=True):
+    if not restart_monitors(monitors, silent):
         return False
 
-    if subprocess.call('sudo cp {} /etc/ceph/ceph.conf'.format(path), shell=True, **self.call_opts()) != 0:
+    if subprocess.call('sudo cp {} /etc/ceph/ceph.conf'.format(path), get_subprocess_kwargs(silent)) != 0:
         return False
-    return subprocess.call('sudo cp /users/{}/ceph.client.admin.keyring /etc/ceph/ceph.client.admin.keyring'.format(self.admin.user), shell=True, **self.call_opts()) == 0
+    return subprocess.call('sudo cp /users/{}/ceph.client.admin.keyring /etc/ceph/ceph.client.admin.keyring'.format(self.admin.user), get_subprocess_kwargs(silent)) == 0
 
 
 def copy_osd_keys(self):
     '''Copies osd keyrings to OSDs.''' 
-    executors = [Executor('scp ceph.bootstrap-osd.keyring {}:~/'.format(x.name), shell=True, **self.call_opts()) for x in self.osds]
+    executors = [Executor('scp ceph.bootstrap-osd.keyring {}:~/'.format(x.name), get_subprocess_kwargs(silent)) for x in self.osds]
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):
         printe('Could not scp keyring to all OSDs.')
@@ -99,62 +100,6 @@ def create_pools(self):
         return False
 
 
-def start_osds(self):
-    '''Boots OSDs. Because of the large amount of remote commands to be executed, continues framework execution on remote hosts in parallel.'''
-    executors = [Executor('ssh {} "python3 MetaSpark/main.py ceph deploy cluster local {} --local-osd -st {} --num-osds {}"'.format(x.name, AllocationMethod.GENI_DIRECT.name, self.storetype.name, len([1 for y in x.designations if y == Designation.OSD])), shell=True, **self.call_opts()) for x in self.osds]
-    Executor.run_all(executors)
-    return Executor.wait_all(executors, print_on_error=True)
-    # for x in self.osds:
-    #     cmd = 'ssh {} "python3 MetaSpark/main.py ceph deploy cluster local {} --local-osd -st {} --num-osds {}"'.format(x.name, AllocationMethod.GENI_DIRECT.name, self.storetype.name, len([1 for y in x.designations if y == Designation.OSD]))
-    #     if subprocess.call(cmd, shell=True) != 0:
-    #         return False
-    # return True
-
-
-@staticmethod
-def deploy_ceph_osd_local(amount, storetype=StoreType.MEMSTORE, debug=True):
-    '''Starts a Ceph OSD. Must be called from the OSD node itself.
-    Args:
-        amount: Amount of OSD daemons to spawn on local device.
-        storetype (`str` or `StoreType`): Determines the OSD storage mode. 
-        debug: If set, we print a lot of subprocess command output. Subprocess commands are silent otherwise (default=`False`).
-
-    Returns:
-        `True` on success, `False` on failure.'''
-    if storetype == StoreType.MEMSTORE:
-        def func(debug, number):
-            new_uuid = uuid.uuid4()
-            try:
-                osd_secret = subprocess.check_output('sudo ceph-authtool --gen-print-key', shell=True).decode('utf-8').strip()
-                osd_id = subprocess.check_output('sudo ceph osd new {} -i - -n client.bootstrap-osd -k /var/lib/ceph/bootstrap-osd/ceph.keyring'.format(new_uuid), input='{{"cephx_secret": "{}"}}'.format(osd_secret).encode('utf-8'),  shell=True).decode('utf-8').strip()
-                print('[{}] Ceph secret: {}. UUID: {}. ID: {}'.format(number, osd_secret, new_uuid, osd_id))
-
-                umount_code = subprocess.call('sudo umount -f /var/lib/ceph/osd/ceph-{}'.format(osd_id), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-                if umount_code != 0 and umount_code != 32: # We could not unmount and it was for another reason than the mountpoint not existing.
-                    return False
-                subprocess.check_call('sudo mkdir -p /var/lib/ceph/osd/ceph-{}'.format(osd_id), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo rm -rf /var/lib/ceph/osd/ceph-{}/*'.format(osd_id), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo ceph-authtool --create-keyring /var/lib/ceph/osd/ceph-{0}/keyring --name osd.{0} --add-key {1}'.format(osd_id, osd_secret), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo ceph-osd -i {} --mkfs --osd-uuid {}'.format(osd_id, new_uuid), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo chown -R ceph:ceph /var/lib/ceph/osd/ceph-{}'.format(osd_id), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo systemctl enable ceph-osd@{}'.format(osd_id), shell=True, **CephDeployGENI.static_call_opts(debug))
-                subprocess.check_call('sudo systemctl start ceph-osd@{}'.format(osd_id), shell=True, **CephDeployGENI.static_call_opts(debug))
-                return True
-            except Exception as e:
-                printe('[{}] Experienced error: {}'.format(number, e))
-                return False
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(func, debug, x) for x in range(amount)]
-            return_values = [x.result() for x in futures]
-        return all(return_values)
-    else:
-        raise NotImplementedError
-
-
-def start_mdss(self):
-    '''Starts metadata servers.'''
-    cmd = '{} mds create {}'.format(self.ceph_deploypath, ' '.join(x.name for x in self.mdss))
-    return subprocess.call(cmd, shell=True, **self.call_opts()) == 0
 
 
 def start_cephfs(self):
@@ -183,3 +128,106 @@ def start_cephfs(self):
             printw('Executing ceph-fuse... (attempt {}/60)'.format(y+1))
         time.sleep(1)
     return False
+
+
+def generate_connections():
+    pass
+
+
+'''
+IDEA-0: make code available here to open nice remoto connections to all nodes. Can reuse connections every time we need to execute remotely on e.g. a manager node.
+Note that we cannot use the module import feature here.
+Need non-trivial present:
+    0. remoto - check, available because ceph-deploy is already installed.
+
+Need own sources:
+    0. thirdparty.sshconf.sshconf (clean)
+    1. internal.remoto.ssh_wrapper (clean)
+    2. internal.remoto.util (clean, has non-trivial imports, disable warning when generating)
+    3. metareserve's reservation.py
+Can access obtaining connections in the 'regular' way after that.
+'''
+
+def start_rados(reservation_str, silent, retries):
+    reservation = Reservation.from_string(reservation_str)
+
+    monitors = [x for x in reservation.nodes if 'designations' in x.extra_info and Designation.MON.name.lower() in x.extra_info['designations'].split()]
+    managers = [x for x in reservation.nodes if 'designations' in x.extra_info and Designation.MGR.name.lower() in x.extra_info['designations'].split()]
+    mdss = [x for x in reservation.nodes if 'designations' in x.extra_info and Designation.MDS.name.lower() in x.extra_info['designations'].split()]
+    osds = [x for x in reservation.nodes if 'designations' in x.extra_info and Designation.OSD.name.lower() in x.extra_info['designations'].split()]
+
+    ceph_deploypath = join(os.path.expanduser('~/'), '.local', 'bin', 'ceph-deploy')
+
+    if not isfile(ceph_deploypath):
+        printe('Could not find ceph-deploy at "{}". Run the "install" command of this program, and be sure to pick the same admin id when doing that vs here.')
+        return False
+
+    keyfile = join(os.path.expanduser('~/'), '.ssh', 'rados_deploy.rsa')
+    if not isfile(keyfile):
+        printe('Could not find private key for internal cluster comms at "{}". Run the "install" command of this program.'.format(keyfile))
+        return False
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
+        ssh_kwargs = {'IdentitiesOnly': 'yes', 'StrictHostKeyChecking': 'no', 'IdentityFile': keyfile}
+        futures_connection = {x: executor.submit(get_ssh_connection, x.ip_public, silent=silent, ssh_params=_merge_kwargs(ssh_kwargs, {'User': x.extra_info['user']})) for x in reservation.nodes}
+        connectionwrappers = {x: val.result() for key, val in futures_connection.items()}
+
+        if any(True for x in connectionwrappers.values() if not x):
+            printe('Could not connect to some nodes.')
+            return False
+
+        # Begin starting procedure
+        if not silent:
+            print('Starting monitors...')
+        if not (create_monitors(monitors, ceph_deploypath, silent) and start_monitors(ceph_deploypath, silent) and send_config_keys(set(monitors).union(set(managers)))):
+            return False
+        if not silent:
+            prints('Started monitors')
+            print('Stopping managers...')
+
+        # stop_managers(managers, silent) # Managers are halted and recreated to ensure no side-effects occur when calling this function multiple times.
+        futures_stop_managers = [executor.submit(stop_manager, connectionwrappers[x].connection, silent) for x in managers]
+        if any(True for x in futures_stop_managers if not x.result()):
+            return False
+
+        if not silent:
+            prints('Stopped managers')
+            print('Starting managers...')
+        if not start_managers(managers, ceph_deploypath, silent):
+            return False
+        if not silent:
+            prints('Started managers')
+            print('Editing configs...')
+        if not update_config(nodeset, ceph_deploypath, silent):
+            return False
+        if not silent:
+            prints('Edited configs')
+            print('Deploying OSD keys...')
+        if not copy_osd_keys():
+            return False
+        if not silent:
+            prints('Deployed OSD keys')
+            print('Stopping old OSD runs...')
+        stop_osds() # OSDs are halted and recreated to ensure no side-effects occur when calling this function multiple times.
+        if not silent:
+            prints('Stopped old OSD runs')
+            print('Booting OSDs...')
+        if not start_osds():
+            return False
+        if not silent:
+            prints('Booted OSDs')
+            print('Stopping old mdss...')
+        stop_mdss() # MDSs are halted and recreated to ensure no side-effects occur when calling this function multiple times.
+        if not silent:
+            prints('Stopped old mdss')
+            print('Starting mdss...')
+        if not start_mdss():
+            return False
+        if not silent:
+            prints('Started mdss')
+            print('Starting CephFS...')
+        if not start_cephfs():
+            return False
+        if not silent:
+            prints('Ceph mountpoints ready. Ceph cluster ready!')
+        return True
