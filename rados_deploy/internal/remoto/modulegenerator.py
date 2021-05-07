@@ -84,7 +84,7 @@ class ModuleGenerator(object):
             `(set, set)`: The first set contains all found stl import names using format 'import x', with elements `x`.
                           The second set contains all found stl import names using format 'from x import y (as z)', with elements `(x, y)` and `(x, y, z)`.'''
         regex_import = re.compile(r'^ *import +([a-zA-Z\._0-9]+)', re.MULTILINE)
-        regex_from_import = re.compile(r'^ *from +([a-zA-Z\._0-9]+) import +([a-zA-Z\._0-9]+) *(?:as)? *([a-zA-Z\._0-9]+)?', re.MULTILINE)
+        regex_from_import = re.compile(r'^ *from +([a-zA-Z\._0-9]+) import +((?:[a-zA-Z\._0-9]+, *)*[a-zA-Z\._0-9]+) *(?:as)? *([a-zA-Z\._0-9]+)?', re.MULTILINE)
         found_stl_imports = set()
         found_stl_import_froms = set()
 
@@ -98,7 +98,7 @@ class ModuleGenerator(object):
                     matchtuple = match.groups()
                     match_importmodule = matchtuple[0]
 
-                    if (not self._is_regular_python(match_importmodule)) or (allowed_set and match_importmodule in allowed_set):
+                    if (not self._is_regular_python(match_importmodule)) and not (allowed_set and match_importmodule in allowed_set):
                         if not silent:
                             printw('(file: {}) Found non-regular import "{}".'.format(x, match_importmodule))
                     else:

@@ -2,12 +2,15 @@ import logging
 import remoto
 import tempfile
 from internal.remoto.ssh_wrapper import RemotoSSHWrapper
-import thirdparty.sshconf as sshconf
+from thirdparty.sshconf import *
 from internal.util.printer import *
 
 def _get_logger(loggername, loglevel):
-    logging.basicConfig()
+    # logging.basicConfig()
+    # logger = logging.getLogger(loggername)
+    # logger.setLevel(loglevel)
     logger = logging.getLogger(loggername)
+    logger.addHandler(logging.StreamHandler())
     logger.setLevel(loglevel)
     return logger
 
@@ -52,7 +55,7 @@ def get_ssh_connection(remote_hostname, silent=True, loggername='SilentLogger', 
     if ssh_params:
         if not isinstance(ssh_params, dict):
             raise ValueError('If set, ssh_params must be a dictionary mapping SSH options to values. E.g: {{"IdentityFile": "/some/key.rsa", "IdentitiesOnly": "yes", "Port": 22}}')
-        conf = sshconf.empty_ssh_config_file()
+        conf = empty_ssh_config_file() # function in thirdparty.sshconf
         conf.add(remote_hostname, **ssh_params)
         tmpfile = tempfile.NamedTemporaryFile()
         conf.write(tmpfile.name)
