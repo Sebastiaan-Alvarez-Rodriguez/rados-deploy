@@ -24,12 +24,19 @@ def _prepare_remote_file(connection, stripe, source_file, dest_file):
     if exitcode != 0:
         printe('Could not touch file at cluster: {}'.format(dest_file))
         return False
-    cmd = 'sudo setfattr -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file)
-    _, _, exitcode = remoto.process.check(connection, cmd, shell=True)
+    _, _, exitcode = remoto.process.check(connection, 'sudo setfattr -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file), shell=True)
     if exitcode != 0:
-        printe('Could not stripe file at cluster: {}'.format(cmd))
+        printe('Could not stripe file at cluster: {}. Is the cluster running?'.format(dest_file))
         return False
     return True
+
+
+def _ensure_attr(connection):
+    '''Installs the 'attr' package, if not available.'''
+    _, _, exitcode = remoto.process.check(connection, 'which setfattr', shell=True)
+    if exitcode != 0:
+        remoto.process.check(connection, 'sudo apt install attr -y', shell=True)
+
 
 
 def _pick_admin(reservation, admin=None):
@@ -133,9 +140,7 @@ def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None
 
     paths = [fs.abspath(x) for x in paths]
 
-    _, _, exitcode = remoto.process.check(connection.connection, 'which setfattr', shell=True)
-    if exitcode != 0:
-        process.check(connection.connection, 'sudo apt install attr -y', shell=True)
+    _ensure_attr(connection)
 
     max_filesize = stripe * 1024 * 1024
     with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
