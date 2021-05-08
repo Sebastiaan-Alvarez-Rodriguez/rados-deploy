@@ -1,5 +1,6 @@
 import concurrent.futures
 from multiprocessing import cpu_count
+import os
 
 import remoto.process
 
@@ -9,7 +10,7 @@ from internal.util.printer import *
 
 
 def _default_stripe():
-    return 64*1024*1024 # 64MB
+    return 64 # 64MB
 
 
 def _default_mountpoint_path():
@@ -23,7 +24,7 @@ def _prepare_remote_file(connection, stripe, source_file, dest_file):
     if exitcode != 0:
         printe('Could not touch file at cluster: {}'.format(dest_file))
         return False
-    cmd = 'sudo setfattr -n ceph.file.layout.object_size -v {} {}'.format(stripe, dest_file)
+    cmd = 'sudo setfattr -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file)
     _, _, exitcode = remoto.process.check(connection, cmd, shell=True)
     if exitcode != 0:
         printe('Could not stripe file at cluster: {}'.format(cmd))
@@ -93,10 +94,9 @@ def clean(reservation, key_path, paths, admin_id=None, mountpoint_path=_default_
 
     if state_ok:
         prints('Data deleted.')
-        return True
     else:
         printe('Could not delete data.')
-        return False
+    return state_ok
 
 
 
@@ -106,7 +106,7 @@ def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
         key_path (str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         paths (list(str)): Data paths to offload to the remote cluster. Can be relative to CWD or absolute.
-        stripe (optional int): Ceph object stripe property, in bytes.
+        stripe (optional int): Ceph object stripe property, in megabytes.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
         mountpoint_path (optional str): Path where CephFS is mounted on all nodes.
         silent (optional bool): If set, we only print errors and critical info. Otherwise, more verbose output.
@@ -115,6 +115,10 @@ def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None
         `True` on success, `False` otherwise.'''
     if not reservation or len(reservation) == 0:
         raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
+    if stripe < 4:
+        raise ValueError('Stripe size must be equal to or greater than 4MB (and a multiple of 4MB)!')
+    if stripe % 4 != 0:
+        raise ValueError('Stripe size must be a multiple of 4MB!')
     if not any(paths):
         return True
 
@@ -133,20 +137,29 @@ def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None
     if exitcode != 0:
         process.check(connection.connection, 'sudo apt install attr -y', shell=True)
 
+    max_filesize = stripe * 1024 * 1024
     with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
         prepare_futures = []
 
         for path in paths:
             if fs.isfile(path):
+                if os.path.getsize(path) > max_filesize:
+                    printe('File {} is too large ({} bytes, max allowed is {} bytes)'.format(path, os.path.getsize(path), max_filesize))
+                    return False
                 prepare_futures.append(executor.submit(_prepare_remote_file, connection.connection, stripe, path, fs.join(mountpoint_path, fs.basename(path))))
             elif fs.isdir(path):
                 to_visit = [path]
                 path_len = len(path)
                 while any(to_visit):
                     visit_now = to_visit.pop()
-                    visit_now_len = len(visit_now)
                     to_visit += list(fs.ls(visit_now, only_dirs=True, full_paths=True))
-                    prepare_futures += [executor.submit(_prepare_remote_file, connection.connection, stripe, x, fs.join(mountpoint_path, x[path_len+1:])) for x in fs.ls(visit_now, only_files=True, full_paths=True)]
+                    files = list(fs.ls(visit_now, only_files=True, full_paths=True))
+                    files_too_big = [x for x in files if os.path.getsize(x) > max_filesize]
+                    if any(files_too_big):
+                        for x in files_too_big:
+                            printe('File {} is too large ({} bytes, max allowed is {} bytes)'.format(x, os.path.getsize(x), max_filesize))
+                        return False
+                    prepare_futures += [executor.submit(_prepare_remote_file, connection.connection, stripe, x, fs.join(mountpoint_path, x[path_len+1:])) for x in files]
         if not all(x.result() for x in prepare_futures):
             return False
 

@@ -9,7 +9,7 @@ def subparser(subparsers):
     deployparser.add_argument('paths', metavar='paths', type=str, nargs='+', help='Data path(s) to deploy on the remote cluster.')
     deployparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the Ceph admin node.')
     deployparser.add_argument('--mountpoint', metavar='path', type=str, default=_data._default_mountpoint_path(), help='Mountpoint for CephFS on all nodes (default={}).'.format(_data._default_mountpoint_path()))
-    deployparser.add_argument('--stripe', metavar='amount', type=int, default=_data._default_stripe(), help='Striping, in bytes (default={}).'.format(_data._default_stripe()))
+    deployparser.add_argument('--stripe', metavar='amount', type=int, default=_data._default_stripe(), help='Striping, in megabytes (default={}MB). Must be a multiple of 4. Make sure that every file is smaller than set stripe size.'.format(_data._default_stripe()))
     deployparser.add_argument('--silent', help='If set, less boot output is shown.', action='store_true')
     return [deployparser]
 
