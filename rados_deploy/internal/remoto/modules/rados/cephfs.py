@@ -30,7 +30,7 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
     if not send_config_with_keys([node], ceph_deploypath, silent):
         return False
 
-    remoto.process.check(connection, 'sudo rm -rf {}/*'.format(path), shell=True)
+    remoto.process.check(connection, 'sudo rm -rf {0}/* && sudo rm -rf {0}/.*'.format(path), shell=True)
 
     import time
     for x in range(retries):
