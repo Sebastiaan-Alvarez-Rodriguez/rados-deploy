@@ -32,7 +32,7 @@ def stop_rados(reservation_str, mountpoint_path, silent):
     ceph_deploypath = join(os.path.expanduser('~/'), '.local', 'bin', 'ceph-deploy')
 
     if not isfile(ceph_deploypath):
-        printe('Could not find ceph-deploy at "{}". Run the "install" command of this program, and be sure to pick the same admin id when doing that vs here.')
+        printe('Could not find ceph-deploy at "{}". This is not the admin node, or you did not run the "install" command of this program.')
         return False
 
     keyfile = join(os.path.expanduser('~/'), '.ssh', 'rados_deploy.rsa')

@@ -13,7 +13,8 @@ def _get_modules():
     import cli.install as install
     import cli.start as start
     import cli.stop as stop
-    return [install, start, stop]
+    import cli.restart as restart
+    return [install, start, stop, restart]
 
 
 def generic_args(parser):

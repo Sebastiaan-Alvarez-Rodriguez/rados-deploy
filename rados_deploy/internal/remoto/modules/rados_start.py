@@ -98,14 +98,14 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
         raise ValueError('We require at least 2 nodes with the "{}" designation.'.format(Designation.MGR.name.lower()))
     if len(mdss) < 2:
         raise ValueError('We require at least 2 nodes with the "{}" designation.'.format(Designation.MDS.name.lower()))
-    if len(osds) < 3:
+    if sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in osds]) < 3:
         raise ValueError('We require at least 3 nodes with the "{}" designation.'.format(Designation.OSD.name.lower()))
     
 
     ceph_deploypath = join(os.path.expanduser('~/'), '.local', 'bin', 'ceph-deploy')
 
     if not isfile(ceph_deploypath):
-        printe('Could not find ceph-deploy at "{}". Run the "install" command of this program, and be sure to pick the same admin id when doing that vs here.')
+        printe('Could not find ceph-deploy at "{}". This is not the admin node, or you did not run the "install" command of this program.')
         return False
 
     keyfile = join(os.path.expanduser('~/'), '.ssh', 'rados_deploy.rsa')
