@@ -22,11 +22,7 @@ def start_monitors(ceph_deploypath, silent):
 
 def stop_monitor(monitor, connection, silent):
     '''Stops monitors. Does not return anything.'''
-    out, err, code = remoto.process.check(connection, 'sudo systemctl stop ceph-mon.target', shell=True)
-    return code == 0
-    # executors = [Executor('ssh {} "sudo systemctl stop ceph-mon.target"'.format(x.hostname), **get_subprocess_kwargs(silent)) for x in monitors]
-    # Executor.run_all(executors)
-    # Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
+    _, _, _ = remoto.process.check(connection, 'sudo systemctl stop ceph-mon.target', shell=True)
 
 
 def restart_monitors(monitors, silent):

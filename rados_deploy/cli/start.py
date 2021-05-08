@@ -6,7 +6,7 @@ import start as _start
 
 def subparser(subparsers):
     '''Register subparser modules'''
-    startparser = subparsers.add_parser('start', help='Start RADOS-Ceph environment on server cluster.')
+    startparser = subparsers.add_parser('start', help='Start RADOS-Ceph on a cluster.')
     startparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that will be the Ceph admin node.')
     startparser.add_argument('--mountpoint', metavar='path', type=str, default=_start._default_mountpoint_path(), help='Mountpoint for CephFS on all nodes (default={}).'.format(_start._default_mountpoint_path()))
     startparser.add_argument('--silent', help='If set, less boot output is shown.', action='store_true')

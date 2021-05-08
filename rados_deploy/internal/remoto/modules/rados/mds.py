@@ -17,11 +17,7 @@ def start_mdss(mdss, ceph_deploypath, silent):
 
 def stop_mds(mds, connection, silent):
     '''Stops a (!)single(!) metadata server. Does not return anything.'''
-    out, err, code = remoto.process.check(connection, 'sudo systemctl stop ceph-mds.target', shell=True)
-    return code == 0
-    # executors = [Executor('ssh {} "sudo systemctl stop ceph-mds.target"'.format(x.hostname), **get_subprocess_kwargs(silent)) for x in mdss]
-    # Executor.run_all(executors)
-    # Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
+    _, _, _ = remoto.process.check(connection, 'sudo systemctl stop ceph-mds.target', shell=True)
 
 
 def restart_mdss(mdss, silent):

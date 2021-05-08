@@ -21,17 +21,12 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
 
     Returns:
         `True` on success, `False` on failure.'''
-    # if Designation.OSD in self.admin.designations:
-    #     if subprocess.call('sudo cp ceph.bootstrap-osd.keyring /var/lib/ceph/bootstrap-osd/ceph.keyring', **get_subprocess_kwargs(silent)) != 0:
-    #         return False
     remoto.process.check(connection, 'sudo mkdir -p {}'.format(path), shell=True)
     remoto.process.check(connection, 'sudo mkdir -p /etc/ceph'.format(path), shell=True)
     _, _, exitcode = remoto.process.check(connection, 'sudo apt update -y && sudo apt install ceph-fuse -y', shell=True)
     if exitcode != 0:
         return False
 
-    # scp /etc/ceph/ceph.conf worker:/etc/ceph/ceph.conf
-    # scp /etc/ceph/ceph.client.admin.keyring worker:/etc/ceph/ceph.client.admin.keyring
     if not send_config_with_keys([node], ceph_deploypath, silent):
         return False
 

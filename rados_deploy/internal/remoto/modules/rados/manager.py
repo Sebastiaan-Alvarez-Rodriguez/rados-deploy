@@ -15,12 +15,8 @@ def start_managers(managers, ceph_deploypath, silent):
 
 
 def stop_manager(manager, connection, silent):
-    '''Stops managers. Returns nothing.'''
-    out, err, code = remoto.process.check(connection, 'sudo systemctl stop ceph-mgr.target', shell=True)
-    return code == 0
-    # executors = [Executor('ssh {} "sudo systemctl stop ceph-mgr.target"'.format(x.hostname), **get_subprocess_kwargs(silent)) for x in managers]
-    # Executor.run_all(executors)
-    # Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
+    '''Stops a single manager.'''
+    _, _, _ = remoto.process.check(connection, 'sudo systemctl stop ceph-mgr.target', shell=True)
 
 
 def restart_managers(managers, silent):

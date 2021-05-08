@@ -1,11 +1,6 @@
 import subprocess
 import concurrent.futures
 
-def get_subprocess_kwargs(silent):
-    if silent:
-        return {'shell': True, 'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL}
-    return {'shell': True}
-
 
 def update_config(nodes, ceph_deploypath, silent):
     '''Edit ceph.config and push it to all nodes. By default, the config is found in admin home directory.
@@ -74,19 +69,6 @@ def _merge_kwargs(x, y):
     return z
 
 
-'''
-IDEA-0: make code available here to open nice remoto connections to all nodes. Can reuse connections every time we need to execute remotely on e.g. a manager node.
-Note that we cannot use the module import feature here.
-Need non-trivial present:
-    0. remoto - check, available because ceph-deploy is already installed.
-
-Need own sources:
-    0. thirdparty.sshconf.sshconf (clean)
-    1. internal.remoto.ssh_wrapper (clean)
-    2. internal.remoto.util (clean, has non-trivial imports, disable warning when generating)
-    3. metareserve's reservation.py
-Can access obtaining connections in the 'regular' way after that.
-'''
 
 def start_rados(reservation_str, mountpoint_path, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
@@ -97,7 +79,10 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
                                Note: When a node specifies the 'osd' designation X times, that node will host X osds.
         mountpoint_path (str): Path to mount CephFS to on ALL nodes.
         silent (bool): If set, prints are less verbose.
-        retries (int): Number of retries for potentially failing operations
+        retries (int): Number of retries for potentially failing operations.
+
+    Returns:
+        `True` on success, `False` on failure.
     '''
     reservation = Reservation.from_string(reservation_str)
 
@@ -148,8 +133,8 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
 
         # Managers are halted and recreated to ensure no side-effects occur when calling this function multiple times.
         futures_stop_managers = [executor.submit(stop_manager, x, connectionwrappers[x].connection, silent) for x in managers]
-        if not all(x.result() for x in futures_stop_managers):
-            return False
+        for x in futures_stop_managers:
+            x.result()
 
         if not silent:
             prints('Stopped managers')
@@ -197,8 +182,8 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
             print('Stopping old MDSs...')
         
         futures_stop_mdss = [executor.submit(stop_mds, x, connectionwrappers[x].connection, silent) for x in mdss]
-        if not all(x.result() for x in futures_stop_mdss):
-            return False
+        for x in futures_stop_mdss:
+            x.result()
 
         if not silent:
             prints('Stopped old MDSs')
@@ -221,7 +206,3 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
                 prints('Ceph mountpoints ready. Ceph cluster ready!')
             return True
         return False
-        # # TODO: Stop and mount ceph using cephfs on all nodes.
-        # stop_cephfs(mountpoint_path, silent)
-        # if not start_cephfs(mountpoint_path, retries, silent):
-        #     return False
