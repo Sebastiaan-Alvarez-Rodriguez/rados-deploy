@@ -119,6 +119,7 @@ def install_ceph(hosts_designations_mapping, silent=False):
 
     if subprocess.call('sudo apt update -y', **kwargs) != 0:
         return False
+    if subprocess.call('{} install --common localhost'.format(ceph_deploypath))
 
     executors = []
     for hostname, designations in hosts_designations_mapping.items():

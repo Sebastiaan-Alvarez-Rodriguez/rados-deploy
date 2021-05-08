@@ -5,13 +5,16 @@ import internal.util.importer as importer
 from internal.util.printer import *
 
 
+def _default_mountpoint_path():
+    return '/mnt/cephfs'
+
 def _default_retries():
     return 5
 
 
-def _start_rados(remote_connection, module, reservation, silent=False, retries=5):
+def _start_rados(remote_connection, module, reservation, mountpoint_path, silent=False, retries=5):
     remote_module = remote_connection.import_module(module)
-    return remote_module.start_rados(str(reservation), silent, retries)
+    return remote_module.start_rados(str(reservation), mountpoint_path, silent, retries)
 
 
 def _generate_module_start(silent=False):
@@ -65,7 +68,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start(reservation, key_path, admin_id=None, silent=False, retries=_default_retries()):
+def start(reservation, key_path, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False, retries=_default_retries()):
     '''Boot RADOS-Ceph on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
@@ -88,7 +91,7 @@ def start(reservation, key_path, admin_id=None, silent=False, retries=_default_r
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_start()
-    state_ok = _start_rados(connection.connection, rados_module, reservation, silent=silent, retries=retries)
+    state_ok = _start_rados(connection.connection, rados_module, reservation, mountpoint_path, silent=silent, retries=retries)
     if state_ok:
         prints('Started RADOS-Ceph succeeded.')
         return True

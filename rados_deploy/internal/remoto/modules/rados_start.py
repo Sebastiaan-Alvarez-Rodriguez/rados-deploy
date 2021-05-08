@@ -101,7 +101,7 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
     '''
     reservation = Reservation.from_string(reservation_str)
 
-    ceph_nodes = [x for x in reservation.nodes if 'designations'in x.extra_info and any(x.extra_info['designations'])]
+    ceph_nodes = [x for x in reservation.nodes if 'designations' in x.extra_info and any(x.extra_info['designations'])]
     monitors = [x for x in ceph_nodes if Designation.MON.name.lower() in x.extra_info['designations'].split(',')]
     managers = [x for x in ceph_nodes if Designation.MGR.name.lower() in x.extra_info['designations'].split(',')]
     mdss = [x for x in ceph_nodes if Designation.MDS.name.lower() in x.extra_info['designations'].split(',')]
@@ -174,7 +174,11 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
         if not silent:
             prints('Deployed OSD keys')
             print('Stopping old OSDs...')
-        stop_cephfs(silent) # Must remove any old running cephfs first from the admin node.
+        
+        futures_stop_cephfs = [executor.submit(stop_cephfs, connectionwrappers[x].connection, mountpoint_path, silent) for x in reservation.nodes]
+        for x in futures_stop_cephfs:
+            x.result()
+
         destroy_pools(silent) # Must destroy old pools
         stop_osds(osds, silent) # OSDs are halted to ensure no side-effects occur when calling this function multiple times.
         if not silent:
@@ -192,7 +196,7 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
             prints('Booted OSDs')
             print('Stopping old MDSs...')
         
-        futures_stop_mdss = [executor.submit(stop_mds, connectionwrappers[x].connection, silent) for x in mdss]
+        futures_stop_mdss = [executor.submit(stop_mds, x, connectionwrappers[x].connection, silent) for x in mdss]
         if not all(x.result() for x in futures_stop_mdss):
             return False
 
@@ -204,12 +208,20 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
         if not silent:
             prints('Started MDSs')
             print('Starting CephFS...')
-        if create_pools(silent):
+        if not create_pools(silent):
             return False
-        # TODO: Stop and mount ceph using cephfs on all nodes.
-        stop_cephfs(mountpoint_path, silent)
-        if not start_cephfs(mountpoint_path, retries, silent):
-            return False
-        if not silent:
-            prints('Ceph mountpoints ready. Ceph cluster ready!')
-        return True
+
+        futures_stop_cephfs = [executor.submit(stop_cephfs, connectionwrappers[x].connection, mountpoint_path, silent) for x in reservation.nodes]
+        for x in futures_stop_cephfs:
+            x.result()
+
+        futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, mountpoint_path, retries, silent) for x in reservation.nodes]    
+        if all(x.result() for x in futures_start_cephfs):
+            if not silent:
+                prints('Ceph mountpoints ready. Ceph cluster ready!')
+            return True
+        return False
+        # # TODO: Stop and mount ceph using cephfs on all nodes.
+        # stop_cephfs(mountpoint_path, silent)
+        # if not start_cephfs(mountpoint_path, retries, silent):
+        #     return False
