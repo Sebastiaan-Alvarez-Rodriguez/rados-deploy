@@ -31,7 +31,6 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
         return False
 
     import time
-    retries = retries+5 # We at least require a few tries before all servers respond.
     for x in range(retries):
         _, _, exitcode = remoto.process.check(connection, 'sudo ceph-fuse {}'.format(path), shell=True)
         if exitcode == 0:

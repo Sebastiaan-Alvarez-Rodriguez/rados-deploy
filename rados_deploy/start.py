@@ -9,7 +9,7 @@ def _default_mountpoint_path():
     return '/mnt/cephfs'
 
 def _default_retries():
-    return 5
+    return 10
 
 
 def _start_rados(remote_connection, module, reservation, mountpoint_path, silent=False, retries=5):
