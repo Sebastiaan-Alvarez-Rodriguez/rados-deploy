@@ -71,6 +71,7 @@ def stop(reservation, key_path, admin_id=None, mountpoint_path=_default_mountpoi
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
         key_path (str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        mountpoint_path (optional str): Path where CephFS is mounted on all nodes.
         silent (optional bool): If set, we only print errors and critical info. Otherwise, more verbose output.
         retries (optional int): Number of tries we try to perform potentially-crashing operations.
 

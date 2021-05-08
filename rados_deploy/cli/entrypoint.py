@@ -12,9 +12,10 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__)))) 
 def _get_modules():
     import cli.install as install
     import cli.start as start
+    import cli.data.data as data
     import cli.stop as stop
     import cli.restart as restart
-    return [install, start, stop, restart]
+    return [install, start, data, stop, restart]
 
 
 def generic_args(parser):
@@ -24,19 +25,19 @@ def generic_args(parser):
 
 
 def subparser(parser):
-    '''Register subparser modules'''
+    '''Register subparser modules.'''
     generic_args(parser)
     subparsers = parser.add_subparsers(help='Subcommands', dest='command')
     return [x.subparser(subparsers) for x in _get_modules()]
 
 
 def deploy(mainparser, parsers, args):
-    '''Processing of deploy commandline args occurs here'''
+    '''Processing of deploy commandline args occurs here.'''
     for parsers_for_module, module in zip(parsers, _get_modules()):
         if module.deploy_args_set(args):
             return module.deploy(parsers_for_module, args)
     mainparser.print_help()
-    return True
+    return False
 
 
 def main():
@@ -46,10 +47,10 @@ def main():
         description='Deploy RADOS-ceph on clusters'
     )
     retval = True
-    geniparsers = subparser(parser)
+    parsers = subparser(parser)
 
     args = parser.parse_args()
-    retval = deploy(parser, geniparsers, args)
+    retval = deploy(parser, parsers, args)
 
     if isinstance(retval, bool):
         exit(0 if retval else 1)
