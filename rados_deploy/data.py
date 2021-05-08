@@ -55,16 +55,61 @@ def _merge_kwargs(x, y):
     return z
 
 
+def clean(reservation, key_path, paths, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
+    '''Cleans data from the RADOS-Ceph cluster, on an existing reservation.
+    Args:
+        reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
+        key_path (str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
+        paths (list(str)): Data paths to delete to the remote cluster. Mountpoint path is always prepended.
+        admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        mountpoint_path (optional str): Path where CephFS is mounted on all nodes.
+        silent (optional bool): If set, we only print errors and critical info. Otherwise, more verbose output.
+
+    Returns:
+        `True` on success, `False` otherwise.'''
+    if (not reservation) or len(reservation) == 0:
+        raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
+    
+    admin_picked, _ = _pick_admin(reservation, admin=admin_id)
+    print('Picked admin node: {}'.format(admin_picked))
+
+    ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
+    if key_path:
+        ssh_kwargs['IdentityFile'] = key_path
+
+    connection = _get_ssh_connection(admin_picked.ip_public, silent=True, ssh_params=ssh_kwargs)
+
+    if not any(paths):
+        _, _, exitcode = remoto.process.check(connection.connection, 'sudo rm -rf {}/*'.format(mountpoint_path), shell=True)
+        state_ok = exitcode == 0
+    else:
+        paths = [x if x[0] != '/' else x[1:] for x in paths]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
+            if not silent:
+                print('Deleting data...')
+            rm_futures = [executor.submit(remoto.process.check, connection.connection, 'sudo rm -rf {}'.format(fs.join(mountpoint_path, path)), shell=True) for path in paths]
+
+            state_ok = all(x.result()[2] == 0 for x in rm_futures)
+
+    if state_ok:
+        prints('Data deleted.')
+        return True
+    else:
+        printe('Could not delete data.')
+        return False
+
+
+
 def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
     '''Deploy data on the RADOS-Ceph cluster, on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
         key_path (str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         paths (list(str)): Data paths to offload to the remote cluster. Can be relative to CWD or absolute.
+        stripe (optional int): Ceph object stripe property, in bytes.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
         mountpoint_path (optional str): Path where CephFS is mounted on all nodes.
         silent (optional bool): If set, we only print errors and critical info. Otherwise, more verbose output.
-        retries (optional int): Number of tries we try to perform potentially-crashing operations.
 
     Returns:
         `True` on success, `False` otherwise.'''

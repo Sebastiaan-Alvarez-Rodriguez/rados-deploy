@@ -5,7 +5,8 @@ import cli.util as _cli_util
 
 def _get_modules():
     import cli.data.deploy as deploy
-    return [deploy]
+    import cli.data.clean as clean
+    return [deploy, clean]
 
 
 def subparser(subparsers):
