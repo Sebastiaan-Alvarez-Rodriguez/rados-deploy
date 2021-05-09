@@ -170,10 +170,10 @@ def deploy(reservation, key_path, paths, stripe=_default_stripe(), admin_id=None
 
         if not silent:
             print('Transferring data...')
-        fun = lambda path: subprocess.check_call('rsync -e "ssh -F {}" -az {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))))
+        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -az {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
         rsync_futures = [executor.submit(fun, path) for path in paths]
 
-        if all(x.result() for x in prepare_futures):
+        if all(x.result() for x in rsync_futures):
             prints('Data deployed.')
             return True
         else:
