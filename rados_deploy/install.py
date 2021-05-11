@@ -3,6 +3,7 @@ import hashlib
 import subprocess
 import tempfile
 
+import internal.defaults as defaults
 from designation import Designation
 from internal.remoto.modulegenerator import ModuleGenerator
 from internal.remoto.util import get_ssh_connection as _get_ssh_connection
@@ -21,18 +22,18 @@ def _default_retries():
 def _default_use_sudo():
     return False
 
-def _install_rados(connection, module, reservation, installdir, silent=False, cores=_default_cores()):
+def _install_rados(connection, module, reservation, install_dir, silent=False, cores=_default_cores()):
     remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
-    if not remote_module.install_ceph_deploy(loc.cephdeploydir(installdir), silent):
+    if not remote_module.install_ceph_deploy(loc.cephdeploydir(install_dir), silent):
         printe('Could not install ceph-deploy.')
         return False
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
     if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install ceph on some node(s).')
         return False
-    if not remote_module.install_rados(loc.arrowdir(installdir), hosts_designations_mapping, silent, cores):
+    if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, silent, cores):
         printe('Could not install RADOS-ceph on some node(s).')
         return False
     prints('Installed RADOS-ceph.')
@@ -118,7 +119,7 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
-        installdir (str): Location on remote host to install RADOS-Ceph in.
+        install_dir (str): Location on remote host to install RADOS-Ceph in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
         silent (optional bool): If set, does not print so much info.
@@ -160,12 +161,12 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         return True
 
 
-def install(reservation, installdir, key_path=None, admin_id=None, cluster_keypair=None, silent=False, use_sudo=_default_use_sudo(), cores=_default_cores()):
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, cluster_keypair=None, silent=False, use_sudo=_default_use_sudo(), cores=_default_cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
-        installdir (str): Location on remote host to compile RADOS-arrow in.
+        install_dir (optional str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
         cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
@@ -190,4 +191,4 @@ def install(reservation, installdir, key_path=None, admin_id=None, cluster_keypa
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_rados()
-    return _install_rados(connection.connection, rados_module, reservation, installdir, silent=silent, cores=cores)
+    return _install_rados(connection.connection, rados_module, reservation, install_dir, silent=silent, cores=cores)

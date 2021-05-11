@@ -26,4 +26,4 @@ def deploy_args_set(args):
 
 def deploy(parsers, args):
     reservation = _cli_util.read_reservation_cli()
-    return _install.install(reservation, args.installdir, args.key_path, args.admin_id, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo, cores=args.cores) if reservation else False
+    return _install.install(reservation, args.install_dir, args.key_path, args.admin_id, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo, cores=args.cores) if reservation else False

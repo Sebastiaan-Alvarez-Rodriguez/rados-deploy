@@ -65,7 +65,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def stop(reservation, key_path, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
+def stop(reservation, key_path=None, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
     '''Boot RADOS-Ceph on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.

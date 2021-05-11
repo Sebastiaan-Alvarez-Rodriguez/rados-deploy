@@ -68,11 +68,11 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start(reservation, key_path, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False, retries=_default_retries()):
+def start(reservation, key_path=None, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False, retries=_default_retries()):
     '''Boot RADOS-Ceph on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
-        key_path (str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
+        key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
         mountpoint_path (optional str): Path where CephFS will be mounted on all nodes.
         silent (optional bool): If set, we only print errors and critical info. Otherwise, more verbose output.
