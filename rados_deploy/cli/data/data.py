@@ -1,11 +1,11 @@
-import cli.util as _cli_util
+import rados_deploy.cli.util as _cli_util
 
 '''CLI module to interact with data on a RADOS-Ceph cluster.'''
 
 
 def _get_modules():
-    import cli.data.deploy as deploy
-    import cli.data.clean as clean
+    import rados_deploy.cli.data.deploy as deploy
+    import rados_deploy.cli.data.clean as clean
     return [deploy, clean]
 
 

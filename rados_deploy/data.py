@@ -4,9 +4,9 @@ import os
 
 import remoto.process
 
-from internal.remoto.util import get_ssh_connection as _get_ssh_connection
-import internal.util.fs as fs
-from internal.util.printer import *
+from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+import rados_deploy.internal.util.fs as fs
+from rados_deploy.internal.util.printer import *
 
 
 def _default_stripe():

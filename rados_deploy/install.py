@@ -3,26 +3,17 @@ import hashlib
 import subprocess
 import tempfile
 
-import internal.defaults as defaults
-from designation import Designation
-from internal.remoto.modulegenerator import ModuleGenerator
-from internal.remoto.util import get_ssh_connection as _get_ssh_connection
-import internal.util.fs as fs
-import internal.util.importer as importer
-import internal.util.location as loc
-from internal.util.printer import *
+from rados_deploy import Designation
+import rados_deploy.internal.defaults.install as defaults
+from rados_deploy.internal.remoto.modulegenerator import ModuleGenerator
+from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+import rados_deploy.internal.util.fs as fs
+import rados_deploy.internal.util.importer as importer
+import rados_deploy.internal.util.location as loc
+from rados_deploy.internal.util.printer import *
 
 
-def _default_cores():
-    return 16
-
-def _default_retries():
-    return 5
-
-def _default_use_sudo():
-    return False
-
-def _install_rados(connection, module, reservation, install_dir, silent=False, cores=_default_cores()):
+def _install_rados(connection, module, reservation, install_dir, silent=False, cores=defaults.cores()):
     remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
@@ -114,7 +105,7 @@ def _check_users(reservation):
     return not any(x for x in nodes[1:] if x.extra_info['user'] != known_user)
 
 
-def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, use_sudo=_default_use_sudo()):
+def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, use_sudo=defaults.use_sudo()):
     '''Installs ssh keys in the cluster for internal traffic.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
@@ -161,7 +152,7 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         return True
 
 
-def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, cluster_keypair=None, silent=False, use_sudo=_default_use_sudo(), cores=_default_cores()):
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, cluster_keypair=None, silent=False, use_sudo=defaults.use_sudo(), cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:

@@ -1,4 +1,4 @@
-import internal.util.fs as fs
+import rados_deploy.internal.util.fs as fs
 
 
 def cephdeploydir(install_dir):

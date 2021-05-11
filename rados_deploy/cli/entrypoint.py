@@ -6,15 +6,16 @@ import sys
 
 '''Python CLI module to deploy RADOS-Ceph on metareserve-allocated resources.'''
 
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__)))) # Appends main project root as importpath.
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))) # Appends main project root as importpath.
 
+import rados_deploy
 
 def _get_modules():
-    import cli.install as install
-    import cli.start as start
-    import cli.data.data as data
-    import cli.stop as stop
-    import cli.restart as restart
+    import rados_deploy.cli.install as install
+    import rados_deploy.cli.start as start
+    import rados_deploy.cli.data.data as data
+    import rados_deploy.cli.stop as stop
+    import rados_deploy.cli.restart as restart
     return [install, start, data, stop, restart]
 
 

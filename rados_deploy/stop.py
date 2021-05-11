@@ -1,12 +1,9 @@
-from internal.remoto.modulegenerator import ModuleGenerator
-from internal.remoto.util import get_ssh_connection as _get_ssh_connection
-import internal.util.fs as fs
-import internal.util.importer as importer
-from internal.util.printer import *
-
-
-def _default_mountpoint_path():
-    return '/mnt/cephfs'
+import rados_deploy.internal.defaults.start as start_defaults
+from rados_deploy.internal.remoto.modulegenerator import ModuleGenerator
+from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+import rados_deploy.internal.util.fs as fs
+import rados_deploy.internal.util.importer as importer
+from rados_deploy.internal.util.printer import *
 
 
 def _stop_rados(remote_connection, module, reservation, mountpoint_path, silent=False):
@@ -65,7 +62,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def stop(reservation, key_path=None, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
+def stop(reservation, key_path=None, admin_id=None, mountpoint_path=start_defaults.mountpoint_path(), silent=False):
     '''Boot RADOS-Ceph on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.

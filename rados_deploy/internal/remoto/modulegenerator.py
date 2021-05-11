@@ -4,8 +4,8 @@ import re
 import sys
 import types
 
-import internal.util.fs as fs
-from internal.util.printer import *
+import rados_deploy.internal.util.fs as fs
+from rados_deploy.internal.util.printer import *
 
 
 def _generate_stl_libs():

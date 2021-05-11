@@ -1,9 +1,9 @@
 import logging
 import remoto
 import tempfile
-from internal.remoto.ssh_wrapper import RemotoSSHWrapper
-from thirdparty.sshconf import *
-from internal.util.printer import *
+from rados_deploy.internal.remoto.ssh_wrapper import RemotoSSHWrapper
+from rados_deploy.thirdparty.sshconf import *
+from rados_deploy.internal.util.printer import *
 
 def _get_logger(loggername, loglevel):
     # logging.basicConfig()

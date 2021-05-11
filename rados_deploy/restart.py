@@ -1,17 +1,12 @@
-import start
-import stop
-from internal.util.printer import *
+from rados_deploy import start as _start
+from rados_deploy import stop as _stop
+from rados_deploy.internal.util.printer import *
+import rados_deploy.internal.defaults.start as start_defaults
+import rados_deploy.internal.defaults.restart as defaults
 
 
-def _default_retries():
-    return start._default_retries()
 
-
-def _default_mountpoint_path():
-    return start._default_mountpoint_path()
-
-
-def restart(reservation, key_path=None, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False, retries=_default_retries()):
+def restart(reservation, key_path=None, admin_id=None, mountpoint_path=start_defaults.mountpoint_path(), silent=False, retries=defaults.retries()):
     '''Boot RADOS-Ceph on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
@@ -22,9 +17,9 @@ def restart(reservation, key_path=None, admin_id=None, mountpoint_path=_default_
 
     Returns:
         `True` on success, `False` otherwise.'''
-    if not stop.stop(reservation, key_path, admin_id, mountpoint_path, silent):
+    if not _stop(reservation, key_path, admin_id, mountpoint_path, silent):
         return False
-    if start.start(reservation, key_path, admin_id, mountpoint_path, silent, retries):
+    if _start(reservation, key_path, admin_id, mountpoint_path, silent, retries):
         prints('Restarting RADOS-Ceph succeeded.')
         return True
     else:
