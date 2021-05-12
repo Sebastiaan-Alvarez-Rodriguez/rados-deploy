@@ -5,10 +5,10 @@
 # Quite a few handy tricks are stored here.
 
 import os
+from pathlib import Path
 import shutil
 import sys
-
-from pathlib import Path
+from zipfile import ZipFile, ZipInfo
 
 
 def abspath(path=os.path.dirname(sys.argv[0])):
@@ -125,3 +125,65 @@ def touch(path, *args):
     if exists(path):
         raise RuntimeError('Error: "{}" already exists'.format(path))
     open(path, 'w').close()
+
+
+def unpack(filename, extract_dir):
+    if not filename.endswith('.zip'):
+        shutil.unpack_archive(filename, extract_dir)
+    # Below code is taken from the shutil implementation: https://github.com/python/cpython/blob/78b2abca8e96b43f56ab1b9ad673aaa6bbe7e790/Lib/shutil.py#L1152-L1181
+    # All credits for this code to them. We changed it to work with our zipfile object, which maintains file permissions. Also, we substituted a function to make directories with our own.
+    import zipfile  # late import for breaking circular dependency
+    if not zipfile.is_zipfile(filename):
+        raise ReadError("%s is not a zip file" % filename)
+    zip = _ZipFileWithpermissions(filename)
+    try:
+        for info in zip.infolist():
+            name = info.filename
+            # don't extract absolute paths or ones with .. in them
+            if name.startswith('/') or '..' in name:
+                continue
+            target = join(extract_dir, *name.split('/'))
+            if not target:
+                continue
+            mkdir(dirname(target), exist_ok=True)
+            if not name.endswith('/'):
+                # file
+                data = zip.read(info.filename)
+                f = open(target, 'wb')
+                try:
+                    f.write(data)
+                finally:
+                    f.close()
+                    del data
+                attr = info.external_attr >> 16
+                if attr != 0:
+                    os.chmod(target, attr)
+    finally:
+        zip.close()
+
+
+class _ZipFileWithpermissions(ZipFile):
+    '''Zipfile implementation that fixes https://bugs.python.org/issue15795. No one knows why this fix is not merged into the ZipFile project.'''
+    if sys.version_info <= (3, 5):
+        def extract(self, member, path=None, pwd=None):
+            if not isinstance(member, ZipInfo):
+                member = self.getinfo(member)
+
+            if path is None:
+                path = os.getcwd()
+
+            ret_val = self._extract_member(member, path, pwd)
+            attr = member.external_attr >> 16
+            os.chmod(ret_val, attr)
+            return ret_val
+    else:
+        def _extract_member(self, member, targetpath, pwd):
+            if not isinstance(member, ZipInfo):
+                member = self.getinfo(member)
+
+            targetpath = super()._extract_member(member, targetpath, pwd)
+
+            attr = member.external_attr >> 16
+            if attr != 0:
+                os.chmod(targetpath, attr)
+            return targetpath

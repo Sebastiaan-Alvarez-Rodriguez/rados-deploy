@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 import tempfile
 import urllib.request
@@ -27,10 +26,12 @@ def _get_ceph_deploy(location, silent=False, retries=5):
                     return False
         try:
             extractloc = join(tmpdir, 'extracted')
-            os.makedirs(extractloc, exist_ok=True)
-            shutil.unpack_archive(archiveloc, extractloc)
+            mkdir(extractloc, exist_ok=True)
+            unpack(archiveloc, extractloc)
 
             extracted_dir = next(ls(extractloc, only_dirs=True, full_paths=True)) # find out what the extracted directory is called. There will be only 1 extracted directory.
+            rm(location, ignore_errors=True)
+            mkdir(location)
             for x in ls(extracted_dir, full_paths=True): # Move every file and directory to the final location.
                 mv(x, location)
             return True
@@ -61,15 +62,18 @@ def _get_rados_dev(location, silent=False, retries=5):
                     return False
         try:
             extractloc = join(tmpdir, 'extracted')
-            os.makedirs(extractloc, exist_ok=True)
-            shutil.unpack_archive(archiveloc, extractloc)
+            mkdir(extractloc, exist_ok=True)
+            printw('source: {}. dest: {}'.format(archiveloc, extractloc))
+            unpack(archiveloc, extractloc)
 
             extracted_dir = next(ls(extractloc, only_dirs=True, full_paths=True)) # find out what the extracted directory is called. There will be only 1 extracted directory.
+            rm(location, ignore_errors=True)
+            mkdir(location)
             for x in ls(extracted_dir, full_paths=True): # Move every file and directory to the final location.
                 mv(x, location)
             return True
         except Exception as e:
-            printe('Could not extract RADOS-arrow zip file correctly: ', e)
+            printe('Could not extract RADOS-arrow zip file correctly: {}'.format(e))
             return False
 
 
@@ -83,11 +87,8 @@ def install_ceph_deploy(location, silent=False):
         `True` on success, `False` on failure.'''
     if library_exists('ceph_deploy'):
         return True
-    printw('ceph_deploy unregistered')
     if not pip_install(py='python3'):
         return False
-
-    # https://github.com/ceph/ceph-deploy/archive/refs/heads/master.zip
 
     if not exists(location):
         if not _get_ceph_deploy(location, silent=silent):
@@ -119,7 +120,8 @@ def install_ceph(hosts_designations_mapping, silent=False):
 
     if subprocess.call('sudo apt update -y', **kwargs) != 0:
         return False
-    if subprocess.call('{} install --common localhost'.format(ceph_deploypath))
+    if subprocess.call('{} install --common localhost'.format(ceph_deploypath), **kwargs) != 0:
+        return False
 
     executors = []
     for hostname, designations in hosts_designations_mapping.items():
@@ -149,9 +151,15 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
         kwargs['stderr'] = subprocess.DEVNULL
         kwargs['stdout'] = subprocess.DEVNULL
 
-    if not exists('{}/cpp/build/latest'.format(location)):
-        if subprocess.call('sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk openjdk-11-jdk libboost-all-dev automake bison flex g++ git libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y 1>&2', **kwargs) != 0:
+    if not exists('{}/cpp/build/latest'.format(location)) or not any(ls('{}/cpp/build/latest'.format(location))):
+        if not silent:
+            print('Installing required libraries for RADOS-Ceph.\nPatience...')
+        cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk-headless openjdk-11-jdk-headless libboost-all-dev automake bison flex g++ libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y'
+        if subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
+            printe('Failed to install all required libraries. Command used: {}'.format(cmd))
             return False
+        if not silent:
+            prints('Installed required libraries.')
         if (not isdir(location)) and not _get_rados_dev(location, silent=silent, retries=5):
             return False
         if subprocess.call('cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON 1>&2', cwd='{}/cpp'.format(location), **kwargs) != 0:
