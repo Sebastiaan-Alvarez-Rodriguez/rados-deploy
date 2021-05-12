@@ -37,7 +37,6 @@ for x in range({0}):
 exit(0)
 "
 '''.format(links_amount, dest_file)
-        print('Building links: {}'.format(cmd))
         out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
         if exitcode != 0:
             printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
@@ -46,29 +45,6 @@ exit(0)
     _, _, exitcode = remoto.process.check(connection, 'sudo setfattr --no-dereference -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file), shell=True)
     if exitcode != 0:
         printe('Could not stripe file at cluster: {}. Is the cluster running?'.format(dest_file))
-        return False
-    return True
-
-def _inflate_file(connection, links_amount, dest_file):
-    if links_amount < 1:
-        return True
-
-    cmd = '''sudo python3 -c "
-import os
-pointedloc = '{1}'
-for x in range({0}):
-    pointerloc = '{1}.{{}}'.format(x)
-    if os.path.exists(pointerloc):
-        os.remove(pointerloc)
-    os.link(pointedloc, pointerloc)
-exit(0)
-"
-'''.format(links_amount, dest_file)
-        
-    print('Building links: {}'.format(cmd))
-    out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-    if exitcode != 0:
-        printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
         return False
     return True
 

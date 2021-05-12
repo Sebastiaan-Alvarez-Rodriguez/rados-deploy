@@ -34,14 +34,17 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
 
     remoto.process.check(connection, 'sudo rm -rf {0}/* && sudo rm -rf {0}/.*'.format(path), shell=True)
 
+    state_ok = False
     import time
     for x in range(retries):
         _, _, exitcode = remoto.process.check(connection, 'sudo ceph-fuse {}'.format(path), shell=True)
         if exitcode == 0:
             prints('[{}] Succesfully called ceph-fuse (attempt {}/{})'.format(node.hostname, x+1, retries))
-            return True
+            state_ok = True
+            break
         else:
             printw('[{}] Executing ceph-fuse... (attempt {}/{})'.format(node.hostname, x+1, retries))
         time.sleep(1)
-    remoto.process.check(connection, 'sudo chown -R {} {}'.format(node.extra_info['user'], path))
-    return False
+    if not state_ok:
+        return False
+    return remoto.process.check(connection, 'sudo chown -R {} {}'.format(node.extra_info['user'], path), shell=True)[2] == 0
