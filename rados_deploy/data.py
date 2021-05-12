@@ -1,6 +1,7 @@
 import concurrent.futures
 from multiprocessing import cpu_count
 import os
+import subprocess
 
 import remoto.process
 
@@ -18,20 +19,56 @@ def _default_mountpoint_path():
 
 
 def _prepare_remote_file(connection, stripe, links_amount, source_file, dest_file):
-    remoto.process.check(connection, 'sudo mkdir -p {}'.format(fs.dirname(dest_file)), shell=True)
-    _, _, exitcode = remoto.process.check(connection, 'sudo touch {}'.format(dest_file), shell=True)
+    remoto.process.check(connection, 'mkdir -p {}'.format(fs.dirname(dest_file)), shell=True)
+    _, _, exitcode = remoto.process.check(connection, 'touch {}'.format(dest_file), shell=True)
     if exitcode != 0:
         printe('Could not touch file at cluster: {}'.format(dest_file))
         return False
 
-    exitcodes = [remoto.process.check(connection, 'sudo ln {0} {0}.{1}'.format(dest_file, x), shell=True)[2] for x in range(links_amount)]
-    if any(x for x in exitcodes if x != 0):
-        printe('Could not add hardlinks for file: {}'.format(dest_file))
-        return False
+    if links_amount > 0:
+        cmd = '''python3 -c "
+import os
+pointedloc = '{1}'
+for x in range({0}):
+    pointerloc = '{1}.{{}}'.format(x)
+    if os.path.exists(pointerloc):
+        os.remove(pointerloc)
+    os.link(pointedloc, pointerloc)
+exit(0)
+"
+'''.format(links_amount, dest_file)
+        print('Building links: {}'.format(cmd))
+        out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
+        if exitcode != 0:
+            printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
+            return False
 
-    _, _, exitcode = remoto.process.check(connection, 'sudo setfattr -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file), shell=True)
+    _, _, exitcode = remoto.process.check(connection, 'sudo setfattr --no-dereference -n ceph.file.layout.object_size -v {} {}'.format(stripe*1024*1024, dest_file), shell=True)
     if exitcode != 0:
         printe('Could not stripe file at cluster: {}. Is the cluster running?'.format(dest_file))
+        return False
+    return True
+
+def _inflate_file(connection, links_amount, dest_file):
+    if links_amount < 1:
+        return True
+
+    cmd = '''sudo python3 -c "
+import os
+pointedloc = '{1}'
+for x in range({0}):
+    pointerloc = '{1}.{{}}'.format(x)
+    if os.path.exists(pointerloc):
+        os.remove(pointerloc)
+    os.link(pointedloc, pointerloc)
+exit(0)
+"
+'''.format(links_amount, dest_file)
+        
+    print('Building links: {}'.format(cmd))
+    out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
+    if exitcode != 0:
+        printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
         return False
     return True
 
@@ -176,7 +213,8 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
 
         if not silent:
             print('Transferring data...')
-        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -az {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
+        # fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAX --delete-during {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
+        fun = lambda path: subprocess.call('scp -F {} -qr {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
         rsync_futures = [executor.submit(fun, path) for path in paths]
 
         if all(x.result() for x in rsync_futures):

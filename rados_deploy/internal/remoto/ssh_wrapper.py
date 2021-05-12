@@ -1,4 +1,5 @@
 class RemotoSSHWrapper(object):
+    '''Simple wrapper containing a remoto connection and the file it is using as ssh config.'''
     def __init__(self, connection, ssh_config=None):
         self._connection = connection
         self._ssh_config = ssh_config
@@ -13,7 +14,7 @@ class RemotoSSHWrapper(object):
     
     @property
     def ssh_config(self):
-        return self._ssh_config.conf if self._ssh_config else None
+        return self._ssh_config
     
 
     def __exit__(self, exc_type, exc_val, exc_tb):

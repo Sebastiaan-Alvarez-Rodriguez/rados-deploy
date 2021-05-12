@@ -8,7 +8,7 @@ Requires:
 def send_config_with_keys(nodes, ceph_deploypath, silent):
     '''Pushes configuration and client.admin.key to given hosts.
     Args:
-        nodes (iterable(str)): Iterable of hostnames to push config to.
+        nodes (iterable(metareserve.Node)): Iterable of nodes to push config to.
         ceph_deploypath (str): Path to ceph-deploy binary.
         silent (bool): If set, prints less output.
 

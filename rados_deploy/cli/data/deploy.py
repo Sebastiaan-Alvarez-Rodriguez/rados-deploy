@@ -29,4 +29,4 @@ def deploy_args_set(args):
 
 def deploy(parsers, args):
     reservation = _cli_util.read_reservation_cli()
-    return _deploy(reservation, args.key_path, args.admin_id, args.paths, args.stripe, args.multiplier, mountpoint_path=args.mountpoint, silent=args.silent) if reservation else False
+    return _deploy(reservation, paths=args.paths, key_path=args.key_path, admin_id=args.admin_id, stripe=args.stripe, multiplier=args.multiplier, mountpoint_path=args.mountpoint, silent=args.silent) if reservation else False

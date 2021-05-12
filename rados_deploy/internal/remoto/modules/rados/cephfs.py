@@ -16,8 +16,10 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
     '''Starts cephFS on /mnt/cephfs.
     Warning: This function fails when cephfs is already mounted.
     Args:
-        ceph_deploy: Path to `ceph-deploy` executable.
-        mdss (iterable of `Info`): `Info` objects for nodes with metadata server designation. 
+        node (metareserve.Node): Node to start CephFS on.
+        connection (remoto.Connection): Connection to use for deploying.
+        ceph_deploypath (str): Path to `ceph-deploy` executable.
+        path (optional str): Path to mount CephFS on.
 
     Returns:
         `True` on success, `False` on failure.'''
@@ -41,4 +43,5 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
         else:
             printw('[{}] Executing ceph-fuse... (attempt {}/{})'.format(node.hostname, x+1, retries))
         time.sleep(1)
+    remoto.process.check(connection, 'sudo chown -R {} {}'.format(node.extra_info['user'], path))
     return False
