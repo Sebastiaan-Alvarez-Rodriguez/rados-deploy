@@ -16,12 +16,12 @@ def restart(reservation, key_path=None, admin_id=None, mountpoint_path=start_def
         retries (optional int): Number of tries we try to perform potentially-crashing operations.
 
     Returns:
-        `True` on success, `False` otherwise.'''
+        `(True, admin_node_id)` on success, `(False, None)` otherwise.'''
     if not _stop(reservation, key_path, admin_id, mountpoint_path, silent):
         return False
-    if _start(reservation, key_path, admin_id, mountpoint_path, silent, retries):
+    retval, node_id = _start(reservation, key_path, admin_id, mountpoint_path, silent, retries)
+    if retval:
         prints('Restarting RADOS-Ceph succeeded.')
-        return True
     else:
         printe('Restarting RADOS-Ceph failed.')
-        return False
+    return retval, node_id

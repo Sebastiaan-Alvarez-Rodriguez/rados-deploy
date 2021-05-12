@@ -23,7 +23,8 @@ def _prepare_remote_file(connection, stripe, links_amount, source_file, dest_fil
     if exitcode != 0:
         printe('Could not touch file at cluster: {}'.format(dest_file))
         return False
-    exitcodes = [remoto.process.check(connection, 'sudo ln {0} {0}.{1}'.format(dest_file, x))[2] for x in range(links_amount)]
+
+    exitcodes = [remoto.process.check(connection, 'sudo ln {0} {0}.{1}'.format(dest_file, x), shell=True)[2] for x in range(links_amount)]
     if any(x for x in exitcodes if x != 0):
         printe('Could not add hardlinks for file: {}'.format(dest_file))
         return False
@@ -144,7 +145,7 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
 
     paths = [fs.abspath(x) for x in paths]
 
-    _ensure_attr(connection)
+    _ensure_attr(connection.connection)
 
     max_filesize = stripe * 1024 * 1024
     links_to_add = max(1, multiplier) - 1

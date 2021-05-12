@@ -73,12 +73,12 @@ def start(reservation, key_path=None, admin_id=None, mountpoint_path=defaults.mo
         retries (optional int): Number of tries we try to perform potentially-crashing operations.
 
     Returns:
-        `True` on success, `False` otherwise.'''
+        `(True, admin_node_id)` on success, `(False, None)` otherwise.'''
     if not reservation or len(reservation) == 0:
         raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
 
     admin_picked, _ = _pick_admin(reservation, admin=admin_id)
-    print('Picked admin node: {}'.format(admin_picked))
+    printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
 
     ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
     if key_path:
@@ -89,7 +89,7 @@ def start(reservation, key_path=None, admin_id=None, mountpoint_path=defaults.mo
     state_ok = _start_rados(connection.connection, rados_module, reservation, mountpoint_path, silent=silent, retries=retries)
     if state_ok:
         prints('Started RADOS-Ceph succeeded.')
-        return True
+        return True, admin_picked.node_id
     else:
         printe('Starting RADOS-Ceph failed on some nodes.')
-        return False
+        return False, None
