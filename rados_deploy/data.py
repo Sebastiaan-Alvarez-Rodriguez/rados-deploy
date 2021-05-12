@@ -213,8 +213,8 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
 
         if not silent:
             print('Transferring data...')
-        # fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAX --delete-during {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
-        fun = lambda path: subprocess.call('scp -F {} -qr {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
+        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAX --inplace {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
+        # fun = lambda path: subprocess.call('scp -F {} -qr {} {}:{}'.format(connection.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
         rsync_futures = [executor.submit(fun, path) for path in paths]
 
         if all(x.result() for x in rsync_futures):
