@@ -1,5 +1,6 @@
 import rados_deploy.internal.defaults.install as defaults
 import rados_deploy.cli.util as _cli_util
+import rados_deploy.install_ssh as _install_ssh
 import rados_deploy.install as _install
 
 
@@ -27,4 +28,8 @@ def deploy_args_set(args):
 
 def deploy(parsers, args):
     reservation = _cli_util.read_reservation_cli()
-    return _install(reservation, args.install_dir, args.key_path, args.admin_id, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo, cores=args.cores) if reservation else False
+    if not reservation:
+        return False
+    if not _install_ssh(reservation, key_path=args.key_path, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo):
+        return False
+    return _install(reservation, args.install_dir, args.key_path, args.admin_id, silent=args.silent, use_sudo=args.use_sudo, cores=args.cores)[0] if reservation else False

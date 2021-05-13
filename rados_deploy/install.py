@@ -152,34 +152,31 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         return True
 
 
-def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, cluster_keypair=None, silent=False, use_sudo=defaults.use_sudo(), cores=defaults.cores()):
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, silent=False, use_sudo=defaults.use_sudo(), cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
+    Warning: Requires passwordless communication between nodes on the local network. Use "install_ssh()" to accomplish this.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
         install_dir (optional str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
-        cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
         silent (optional bool): If set, does not print so much info.
         cores (optional int): Number of cores to compile RADOS-arrow with.
 
     Returns:
-        `True` on success, `False` otherwise.'''
+        `True, admin_node_id` on success, `False, None` otherwise.'''
     if not _check_users(reservation):
         printe('Found different usernames between nodes. All nodes must have the same user login!')
-        return False
+        return False, None
 
     admin_picked, _ = _pick_admin(reservation, admin=admin_id)
-    print('Picked admin node: {}'.format(admin_picked))
+    printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
         
     ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
     if key_path:
         ssh_kwargs['IdentityFile'] = key_path
 
-    if not install_ssh(reservation, key_path, cluster_keypair, silent=silent, use_sudo=use_sudo):
-        return False
-
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_rados()
-    return _install_rados(connection.connection, rados_module, reservation, install_dir, silent=silent, cores=cores)
+    return _install_rados(connection.connection, rados_module, reservation, install_dir, silent=silent, cores=cores), admin_picked.node_id

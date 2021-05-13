@@ -63,7 +63,6 @@ def _get_rados_dev(location, silent=False, retries=5):
         try:
             extractloc = join(tmpdir, 'extracted')
             mkdir(extractloc, exist_ok=True)
-            printw('source: {}. dest: {}'.format(archiveloc, extractloc))
             unpack(archiveloc, extractloc)
 
             extracted_dir = next(ls(extractloc, only_dirs=True, full_paths=True)) # find out what the extracted directory is called. There will be only 1 extracted directory.

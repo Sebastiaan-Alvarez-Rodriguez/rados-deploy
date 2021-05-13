@@ -42,7 +42,7 @@ def stop_rados(reservation_str, mountpoint_path, silent):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
         ssh_kwargs = {'IdentitiesOnly': 'yes', 'StrictHostKeyChecking': 'no', 'IdentityFile': keyfile}
-        futures_connection = {x: executor.submit(get_ssh_connection, x.ip_public, loggername='admin_{}'.format(x.hostname), silent=silent, ssh_params=_merge_kwargs(ssh_kwargs, {'User': x.extra_info['user']})) for x in reservation.nodes}
+        futures_connection = {x: executor.submit(get_ssh_connection, x.ip_local, loggername='admin_{}'.format(x.hostname), silent=silent, ssh_params=_merge_kwargs(ssh_kwargs, {'User': x.extra_info['user']})) for x in reservation.nodes}
         connectionwrappers = {key: val.result() for key, val in futures_connection.items()}
 
         if any(True for x in connectionwrappers.values() if not x):
