@@ -13,7 +13,7 @@ import rados_deploy.internal.util.location as loc
 from rados_deploy.internal.util.printer import *
 
 
-def _install_rados(connection, module, reservation, install_dir, silent=False, cores=defaults.cores()):
+def _install_rados(connection, module, reservation, install_dir, force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
@@ -22,12 +22,12 @@ def _install_rados(connection, module, reservation, install_dir, silent=False, c
         return False
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
     if not remote_module.install_ceph(hosts_designations_mapping, silent):
-        printe('Could not install ceph on some node(s).')
+        printe('Could not install Ceph on some node(s).')
         return False
-    if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, silent, cores):
-        printe('Could not install RADOS-ceph on some node(s).')
+    if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, force_reinstall, debug, silent, cores):
+        printe('Could not install RADOS-Ceph on some node(s).')
         return False
-    prints('Installed RADOS-ceph.')
+    prints('Installed RADOS-Ceph.')
     return True
 
 
@@ -62,6 +62,7 @@ def _generate_module_rados(silent=False):
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'printer.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'printer.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'util', 'executor.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'env.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'rados_install.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'remoto_base.py'),
     ]
@@ -151,8 +152,8 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         prints('SSH keys already installed.')
         return True
 
-
-def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, silent=False, use_sudo=defaults.use_sudo(), cores=defaults.cores()):
+# use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Warning: Requires passwordless communication between nodes on the local network. Use "install_ssh()" to accomplish this.
@@ -161,6 +162,9 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
         install_dir (optional str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        use_sudo (optional bool): If set, uses sudo during installation. Tries to avoid it otherwise.
+        force_reinstall (optional bool): If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.
+        debug (optional bool): If set, we compile Arrow using debug flags.
         silent (optional bool): If set, does not print so much info.
         cores (optional int): Number of cores to compile RADOS-arrow with.
 
@@ -179,4 +183,4 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_rados()
-    return _install_rados(connection.connection, rados_module, reservation, install_dir, silent=silent, cores=cores), admin_picked.node_id
+    return _install_rados(connection.connection, rados_module, reservation, install_dir, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id

@@ -22,6 +22,7 @@ def _generate_module_start(silent=False):
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'ssh_wrapper.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'util.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'designation.py'),
+        fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'env.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'rados', 'rados_util.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'rados', 'config.py'),
         fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'remoto', 'modules', 'rados', 'pool.py'),

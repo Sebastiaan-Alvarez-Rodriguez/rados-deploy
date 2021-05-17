@@ -2,7 +2,7 @@ import os
 
 
 class Environment(object):
-    '''Class to load and store persistent variables in a way that does not dependend on OS environment vars, login shells, shell types, etc.'''
+    '''Class to load and store persistent variables in a way that does not depend on OS environment vars, login shells, shell types, etc.'''
     def __init__(self):
         self._entered = False
 
@@ -21,7 +21,7 @@ class Environment(object):
 
     @staticmethod
     def get_storedir():
-        return os.path.join(os.getenv('HOME'), '.spark_deploy')
+        return os.path.join(os.getenv('HOME'), '.rados_deploy')
 
 
     def get(self, key):

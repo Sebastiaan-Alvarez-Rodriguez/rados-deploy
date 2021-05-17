@@ -155,7 +155,8 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
         ssh_kwargs['IdentityFile'] = key_path
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=True, ssh_params=ssh_kwargs)
-
+    if not connection:
+        return False
     paths = [fs.abspath(x) for x in paths]
 
     _ensure_attr(connection.connection)

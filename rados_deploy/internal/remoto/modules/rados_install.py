@@ -132,17 +132,19 @@ def install_ceph(hosts_designations_mapping, silent=False):
     return Executor.wait_all(executors, print_on_error=True)
 
 
-def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
+def install_rados(location, hosts_designations_mapping, force_reinstall=False, debug=False, silent=False, cores=16):
     '''Installs RADOS-arrow, which we need for bridging with Arrow. This function should be executed from the admin node. 
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Assumes apt package manager.
     Args:
         location (str): Location to install RADOS-arrow in. Ceph-deploy root will be`location/ceph-deploy`.
         hosts_designations_mapping (dict(str, list(str))): Dict with key=hostname and value=list of hostname's `Designations` as strings.
+        force_reinstall (optional bool): If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.
+        debug (optional bool): If set, we compile Arrow using debug flags.
+        silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
         cores (optional int): Number of cores to use for compiling (default=4). 
                               Note: Do not set this to a higher value than the number of available cores, as it would only lead to slowdowns.
                                     If set too high, it may happen that RAM consumption is much too high, leading to kernel panic and termination of critical processes.
-        silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
     Returns:
         `True` on success, `False` on failure.'''
     kwargs = {'shell': True}
@@ -150,7 +152,10 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
         kwargs['stderr'] = subprocess.DEVNULL
         kwargs['stdout'] = subprocess.DEVNULL
 
-    if not exists('{}/cpp/build/latest'.format(location)) or not any(ls('{}/cpp/build/latest'.format(location))):
+    if force_reinstall or not (exists('{}/cpp/build/latest'.format(location)) and any(ls('{}/cpp/build/latest'.format(location)))):
+        if subprocess.call('sudo rm -rf {}'.format(location), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
+            printe('Could not remove all files at {}'.format(location))
+            return False
         if not silent:
             print('Installing required libraries for RADOS-Ceph.\nPatience...')
         cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk-headless openjdk-11-jdk-headless libboost-all-dev automake bison flex g++ libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y'
@@ -161,7 +166,10 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
             prints('Installed required libraries.')
         if (not isdir(location)) and not _get_rados_dev(location, silent=silent, retries=5):
             return False
-        if subprocess.call('cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON 1>&2', cwd='{}/cpp'.format(location), **kwargs) != 0:
+        cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
+        if debug:
+            cmake_cmd += ' -DCMAKE_BUILD_TYPE=Debug'
+        if subprocess.call(cmake_cmd+' 1>&2', cwd='{}/cpp'.format(location), **kwargs) != 0:
             return False
         if subprocess.call('sudo make install -j{} 1>&2'.format(cores), cwd='{}/cpp'.format(location), **kwargs) != 0:
             return False
@@ -190,12 +198,12 @@ def install_rados(location, hosts_designations_mapping, silent=False, cores=16):
         printe('Could not copy libraries to destinations on all nodes.')
         return False
 
-    libpath = os.getenv('LD_LIBRARY_PATH') # TODO: Environment variables must be set using Environment class for cross-connection consistency.
-    if libpath == None or not '/usr/local/lib' in libpath.strip().split(':'):
-        with open(join(os.path.expanduser('~/'), '.bashrc'), 'a') as f:
-            if libpath == None:
-                f.write('export LD_LIBRARY_PATH=/usr/local/lib\n')
-            else:
-                f.write('export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH\n')
-        os.environ['LD_LIBRARY_PATH'] = '/usr/local/lib' if not libpath else '/usr/local/lib:'+libpath
+    env = Environment()
+    env.load_to_env()
+    libpath = env.get('LD_LIBRARY_PATH')
+    if not libpath:
+        libpath = ''
+    if not libpath or not '/usr/local/lib' in libpath.strip().split(':'):
+        env.set('LD_LIBRARY_PATH', '/usr/local/lib:'+libpath)
+    os.environ['LD_LIBRARY_PATH'] = '/usr/local/lib:'+libpath
     return subprocess.call('sudo cp /usr/local/lib/libparq* /usr/lib/', **kwargs) == 0
