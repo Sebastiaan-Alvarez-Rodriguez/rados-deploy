@@ -55,7 +55,7 @@ def __pip_install1(py):
         return False
     return subprocess.call('sudo apt install -y {}-pip'.format(py), shell=True) == 0 #, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
 
-def __pip_install2(py):
+def __pip_install2(py, silent=False):
     url = 'https://bootstrap.pypa.io/get-pip.py'
     with tempfile.TemporaryDirectory() as tmpdir: # We use a tempfile to store the downloaded archive.
         archiveloc = os.path.join(tmpdir, 'get-pip.py')

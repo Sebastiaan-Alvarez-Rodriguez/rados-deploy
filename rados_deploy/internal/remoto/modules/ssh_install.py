@@ -56,7 +56,8 @@ Host {0}
     Hostname {0}
     User {1}
     IdentityFile {2}/.ssh/rados_deploy.rsa
-    StrictHostKeyChecking accept-new
+    StrictHostKeyChecking no
+    IdentitiesOnly yes
 '''.format(x, user, home) for x in neededinfo)
     with open('{}/.ssh/config'.format(home), 'a') as f:
         f.write(config)

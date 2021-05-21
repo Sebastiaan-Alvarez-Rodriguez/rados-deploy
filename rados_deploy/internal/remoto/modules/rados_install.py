@@ -99,7 +99,7 @@ def install_ceph_deploy(location, silent=False):
     return subprocess.call('pip3 install . --user', cwd=location, **kwargs) == 0
 
 
-def install_ceph(hosts_designations_mapping, silent=False):
+def install_ceph(hosts_designations_mapping, hosts_user_mapping, silent=False):
     '''Installs required ceph daemons on all nodes. Requires updated package manager.
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Expects to find a 'designations' extra-info key, with as value a comma-separated string for each node in the reservation, listing its designations. 
@@ -109,6 +109,7 @@ def install_ceph(hosts_designations_mapping, silent=False):
     Note: If a host has an empty list as specification, we ignore it and do not install anything.
     Args:
         hosts_designations_mapping (dict(str, list(str))): Dict with key=hostname and value=list of hostname's `Designations` as strings.
+        hosts_user_mapping (dict(str, str)): Dict with key=hostname and val=username for host.
         silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
     
     Returns:
@@ -128,6 +129,12 @@ def install_ceph(hosts_designations_mapping, silent=False):
             continue
         designation_out = '--'+' --'.join([x.lower() for x in set(designations)])
         executors.append(Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, designation_out, hostname), shell=True))
+    Executor.run_all(executors)
+    if not Executor.wait_all(executors, print_on_error=True):
+        return False
+
+    hosts = [key for key, value in hosts_designations_mapping.items() if any(value)] # Only nodes joining the ceph cluster will update ceph file permissions.
+    executors = [Executor('ssh {} "sudo chown -R {} /etc/ceph"'.format(x, hosts_user_mapping[x]), shell=True) for x in hosts]
     Executor.run_all(executors)
     return Executor.wait_all(executors, print_on_error=True)
 

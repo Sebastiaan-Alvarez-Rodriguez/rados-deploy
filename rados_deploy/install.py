@@ -20,8 +20,9 @@ def _install_rados(connection, module, reservation, install_dir, force_reinstall
     if not remote_module.install_ceph_deploy(loc.cephdeploydir(install_dir), silent):
         printe('Could not install ceph-deploy.')
         return False
+    hosts_user_mapping = {x.hostname: x.extra_info['user'] for x in reservation.nodes}
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
-    if not remote_module.install_ceph(hosts_designations_mapping, silent):
+    if not remote_module.install_ceph(hosts_designations_mapping, hosts_user_mapping, silent):
         printe('Could not install Ceph on some node(s).')
         return False
     if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, force_reinstall, debug, silent, cores):
