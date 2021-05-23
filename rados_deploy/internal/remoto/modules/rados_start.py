@@ -55,11 +55,32 @@ def copy_osd_keys(osds, silent):
 
 def install_osd_key(connection, silent):
     '''Installs an OSD key on a (!)single(!) osd.'''
-    out, err, code = remoto.process.check(connection, 'sudo cp ceph.bootstrap-osd.keyring /etc/ceph/ceph.keyring', shell=True)
+    _, _, code = remoto.process.check(connection, 'sudo cp ceph.bootstrap-osd.keyring /etc/ceph/ceph.keyring', shell=True)
     if code != 0:
         return False
 
-    out, err, code = remoto.process.check(connection, 'sudo cp ceph.bootstrap-osd.keyring /var/lib/ceph/bootstrap-osd/ceph.keyring', shell=True)
+    _, _, code = remoto.process.check(connection, 'sudo cp ceph.bootstrap-osd.keyring /var/lib/ceph/bootstrap-osd/ceph.keyring', shell=True)
+    return code == 0
+
+
+def get_primary_group(connection):
+    '''Fetches the primary group name of the current user and returns it.'''
+    out, err, code = remoto.process.check(connection, 'id -gn', shell=True)
+    if code != 0:
+        return None
+    return '\n'.join(out).strip()
+
+
+def chown_key_conf(connection, user):
+    '''Changes ownership of config and client keyring to user. This is required to use RADOS without having to use sudo for everything.'''
+    groupname = get_primary_group(connection)
+    if not groupname:
+        return False
+
+    _, _, code = remoto.process.check(connection, 'sudo chown {}:{} /etc/ceph/ceph.conf'.format(user, groupname), shell=True)
+    if code != 0:
+        return False
+    _, _, code = remoto.process.check(connection, 'sudo chown {}:{} /etc/ceph/ceph.client.admin.keyring'.format(user, groupname), shell=True)
     return code == 0
 
 
@@ -67,7 +88,6 @@ def _merge_kwargs(x, y):
     z = x.copy()
     z.update(y)
     return z
-
 
 
 def start_rados(reservation_str, mountpoint_path, silent, retries):
@@ -82,8 +102,7 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
         retries (int): Number of retries for potentially failing operations.
 
     Returns:
-        `True` on success, `False` on failure.
-    '''
+        `True` on success, `False` on failure.'''
     reservation = Reservation.from_string(reservation_str)
 
     ceph_nodes = [x for x in reservation.nodes if 'designations' in x.extra_info and any(x.extra_info['designations'])]
@@ -93,13 +112,18 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
     osds = [x for x in ceph_nodes if Designation.OSD.name.lower() in x.extra_info['designations'].split(',')]
 
     if len(monitors) < 3:
-        raise ValueError('We require at least 3 nodes with the "{}" designation.'.format(Designation.MON.name.lower()))
+        printe('We require at least 3 nodes with the "{}" designation (found {}).'.format(Designation.MON.name.lower(), len(monitors)))
+        return False
     if len(managers) < 2:
-        raise ValueError('We require at least 2 nodes with the "{}" designation.'.format(Designation.MGR.name.lower()))
+        printe('We require at least 2 nodes with the "{}" designation (found {}).'.format(Designation.MGR.name.lower(), len(managers)))
+        return False
     if len(mdss) < 2:
-        raise ValueError('We require at least 2 nodes with the "{}" designation.'.format(Designation.MDS.name.lower()))
-    if sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in osds]) < 3:
-        raise ValueError('We require at least 3 nodes with the "{}" designation.'.format(Designation.OSD.name.lower()))
+        printe('We require at least 2 nodes with the "{}" designation (found {}).'.format(Designation.MDS.name.lower(), len(mdss)))
+        return False
+    counted_total_osds = sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in osds])
+    if counted_total_osds < 3:
+        printe('We require at least 3 nodes with the "{}" designation (found {}).'.format(Designation.OSD.name.lower(), counted_total_osds))
+        return False
     
 
     ceph_deploypath = join(os.path.expanduser('~/'), '.local', 'bin', 'ceph-deploy')
@@ -201,8 +225,15 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
             x.result()
 
         futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, mountpoint_path, retries, silent) for x in reservation.nodes]    
-        if all(x.result() for x in futures_start_cephfs):
-            if not silent:
-                prints('Ceph mountpoints ready. Ceph cluster ready!')
-            return True
-        return False
+        if not all(x.result() for x in futures_start_cephfs):
+            printe('Not all nodes could setup mountpoints.')
+            return False
+
+        futures_chown_files = [executor.submit(chown_key_conf, connectionwrapper.connection, node.extra_info['user']) for node, connectionwrapper in connectionwrappers.items()]
+        if not all(x.result() for x in futures_chown_files):
+            printe('Could not chown ceph.conf and client keyring on every node')
+            return False
+
+        if not silent:
+            prints('Ceph cluster ready!')
+        return True

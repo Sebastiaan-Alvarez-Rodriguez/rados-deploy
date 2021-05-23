@@ -2,6 +2,15 @@ import subprocess
 import concurrent.futures
 
 
+def chown_key_conf(connection):
+    '''Changes ownership of config and client keyring back to root. This is required to use RADOS without having to use sudo for everything.'''
+    _, _, code = remoto.process.check(connection, 'sudo chown root:root /etc/ceph/ceph.conf', shell=True)
+    if code != 0:
+        return False
+    _, _, code = remoto.process.check(connection, 'sudo chown root:root /etc/ceph/ceph.client.admin.keyring', shell=True)
+    return code == 0
+
+
 def _merge_kwargs(x, y):
     z = x.copy()
     z.update(y)
@@ -50,6 +59,11 @@ def stop_rados(reservation_str, mountpoint_path, silent):
             return False
 
         # Begin halting procedure
+        futures_chown_files = [executor.submit(chown_key_conf, connectionwrappers[x].connection) for x in reservation.nodes]
+        if not all(x.result for x in futures_chown_files):
+            printe('Could not change ownerships back to root all nodes.')
+            return False
+
         if not silent:
             print('Unmounting CephFS mountpoints...')
         

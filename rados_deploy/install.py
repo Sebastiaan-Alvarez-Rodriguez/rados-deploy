@@ -20,9 +20,8 @@ def _install_rados(connection, module, reservation, install_dir, force_reinstall
     if not remote_module.install_ceph_deploy(loc.cephdeploydir(install_dir), silent):
         printe('Could not install ceph-deploy.')
         return False
-    hosts_user_mapping = {x.hostname: x.extra_info['user'] for x in reservation.nodes}
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
-    if not remote_module.install_ceph(hosts_designations_mapping, hosts_user_mapping, silent):
+    if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install Ceph on some node(s).')
         return False
     if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, force_reinstall, debug, silent, cores):
@@ -153,7 +152,7 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         prints('SSH keys already installed.')
         return True
 
-# use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores
+
 def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
