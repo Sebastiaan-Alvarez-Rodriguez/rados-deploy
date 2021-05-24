@@ -40,19 +40,18 @@ def _get_ceph_deploy(location, silent=False, retries=5):
             return False
 
 
-def _get_rados_dev(location, silent=False, retries=5):
-    url = 'https://github.com/Sebastiaan-Alvarez-Rodriguez/arrow/archive/refs/heads/merge_bridge_dev.zip'
+def _get_rados_dev(location, arrow_url, silent=False, retries=5):
     with tempfile.TemporaryDirectory() as tmpdir: # We use a tempfile to store the downloaded archive.
         archiveloc = join(tmpdir, 'rados-arrow.zip')
         if not silent:
-            print('Fetching RADOS-arrow from {}'.format(url))
+            print('Fetching RADOS-arrow from {}'.format(arrow_url))
         for x in range(retries):
             try:
                 try:
                     rm(archiveloc)
                 except Exception as e:
                     pass
-                urllib.request.urlretrieve(url, archiveloc)
+                urllib.request.urlretrieve(arrow_url, archiveloc)
                 break
             except Exception as e:
                 if x == 0:
@@ -133,13 +132,14 @@ def install_ceph(hosts_designations_mapping, silent=False):
     return Executor.wait_all(executors, print_on_error=True)
 
 
-def install_rados(location, hosts_designations_mapping, force_reinstall=False, debug=False, silent=False, cores=16):
+def install_rados(location, hosts_designations_mapping, arrow_url, force_reinstall=False, debug=False, silent=False, cores=16):
     '''Installs RADOS-arrow, which we need for bridging with Arrow. This function should be executed from the admin node. 
     Warning: This only has to be executed on 1 node, which will be designated the `ceph admin node`.
     Warning: Assumes apt package manager.
     Args:
         location (str): Location to install RADOS-arrow in. Ceph-deploy root will be`location/ceph-deploy`.
         hosts_designations_mapping (dict(str, list(str))): Dict with key=hostname and value=list of hostname's `Designations` as strings.
+        arrow_url (str): Download URL for Arrow library to use with RADOS-Ceph.
         force_reinstall (optional bool): If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.
         debug (optional bool): If set, we compile Arrow using debug flags.
         silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be available.
@@ -165,7 +165,7 @@ def install_rados(location, hosts_designations_mapping, force_reinstall=False, d
             return False
         if not silent:
             prints('Installed required libraries.')
-        if (not isdir(location)) and not _get_rados_dev(location, silent=silent, retries=5):
+        if (not isdir(location)) and not _get_rados_dev(location, arrow_url, silent=silent, retries=5):
             return False
         cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
         if debug:

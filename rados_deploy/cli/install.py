@@ -10,6 +10,8 @@ def subparser(subparsers):
     '''Register subparser modules'''
     installparser = subparsers.add_parser('install', help='Orchestrate RADOS-Ceph environment on server cluster.')
     installparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that will be the Ceph admin node.')
+    installparser.add_argument('--arrow-url', dest='arrow_url', type=str, default=defaults.arrow_url(), help='Arrow download URL. Defaults to Arrow with JNI bridge and RADOS-Ceph connector.')
+    
     installparser.add_argument('--cores', metavar='amount', type=int, default=defaults.cores(), help='Amount of cores to use for compiling on remote nodes (default={}).'.format(defaults.cores()))
     installparser.add_argument('--use-sudo', metavar='bool', dest='use_sudo', help='If set, uses superuser-priviledged commands during installation. Otherwise, performs local installs, no superuser privileges required.')
     installparser.add_argument('--force-reinstall', dest='force_reinstall', help='If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.', action='store_true')
@@ -34,4 +36,4 @@ def deploy(parsers, args):
         return False
     if not _install_ssh(reservation, key_path=args.key_path, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo):
         return False
-    return _install(reservation, args.install_dir, args.key_path, args.admin_id, use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores)[0] if reservation else False
+    return _install(reservation, args.install_dir, args.key_path, args.admin_id, arrow_url=args.arrow_url, use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores)[0] if reservation else False

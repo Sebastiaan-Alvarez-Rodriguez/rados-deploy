@@ -13,7 +13,7 @@ import rados_deploy.internal.util.location as loc
 from rados_deploy.internal.util.printer import *
 
 
-def _install_rados(connection, module, reservation, install_dir, force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
+def _install_rados(connection, module, reservation, install_dir, arrow_url=defaults.arrow_url(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     remote_module = connection.import_module(module)
 
     hosts = [x.hostname for x in reservation.nodes]
@@ -24,7 +24,7 @@ def _install_rados(connection, module, reservation, install_dir, force_reinstall
     if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install Ceph on some node(s).')
         return False
-    if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, force_reinstall, debug, silent, cores):
+    if not remote_module.install_rados(loc.arrowdir(install_dir), hosts_designations_mapping, arrow_url, force_reinstall, debug, silent, cores):
         printe('Could not install RADOS-Ceph on some node(s).')
         return False
     prints('Installed RADOS-Ceph.')
@@ -153,7 +153,7 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         return True
 
 
-def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, arrow_url=defaults.arrow_url(), use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Warning: Requires passwordless communication between nodes on the local network. Use "install_ssh()" to accomplish this.
@@ -162,6 +162,7 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
         install_dir (optional str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        arrow_url (optional str): Download URL for Arrow library to use with RADOS-Ceph.
         use_sudo (optional bool): If set, uses sudo during installation. Tries to avoid it otherwise.
         force_reinstall (optional bool): If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.
         debug (optional bool): If set, we compile Arrow using debug flags.
@@ -183,4 +184,4 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
 
     connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_rados()
-    return _install_rados(connection.connection, rados_module, reservation, install_dir, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
+    return _install_rados(connection.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
