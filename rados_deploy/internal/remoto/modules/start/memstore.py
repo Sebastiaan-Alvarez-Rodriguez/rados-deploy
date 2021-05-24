@@ -2,19 +2,20 @@ import subprocess
 import concurrent.futures
 
 
-def update_config(nodes, ceph_deploypath, silent):
+def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, storage_size, silent):
     '''Edit ceph.config and push it to all nodes. By default, the config is found in admin home directory.
     Note: Afterwards, monitors must be restarted for the changes to take effect!'''
     path = join(os.path.expanduser('~/'), 'ceph.conf')
 
     rules = {
         'mon allow pool delete': 'true',
-        'osd objectstore': 'memstore',
         'osd class load list': '*',
-        'memstore device bytes': str(10*1024*1024*1024),
-        'osd op threads': str(4),
-        'osd pool default size': str(3)
+        'osd op threads': str(osd_op_threads),
+        'osd pool default size': str(osd_pool_size)
     }
+    # Memstore-only rules 
+    rules['osd objectstore'] = 'memstore'
+    rules['memstore device bytes'] = str(storage_size)
 
     import configparser
     parser = configparser.ConfigParser()
@@ -26,9 +27,14 @@ def update_config(nodes, ceph_deploypath, silent):
         if not silent:
             print('Checking existing file ({}) for conflicting rules...'.format(path))
 
-        for key in parser['global']:
-            if key in rules and parser['global'][key] != rules[key]: # Rule is present in current file, with incorrect value
-                printw('\tFound conflict: rule={}, found val={}, new val={}'.format(key, parser['global'][key], rules[key]))
+        found_type = determine_config_type(parser)
+        if found_type != StorageType.MEMSTORE:
+            printw('\tFound conflict: Current config is for "{}", but we deploy "{}". rebuilding config from scratch...'.format(found_type.name.lower(), StorageType.MEMSTORE.name.lower()))
+            parser.remove_section('global')
+        else:
+            for key in parser['global']:
+                if key in rules and parser['global'][key] != rules[key]: # Rule is present in current file, with incorrect value
+                    printw('\tFound conflict: rule={}, found val={}, new val={}'.format(key, parser['global'][key], rules[key]))
 
     for key in rules:
         parser['global'][key] = rules[key]
@@ -90,7 +96,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados(reservation_str, mountpoint_path, silent, retries):
+def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, storage_size, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -98,6 +104,9 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
                                The value must be a comma-separated string of lowercase `Designation` names, e.g. 'designations=osd,mon,mgr,mds'.
                                Note: When a node specifies the 'osd' designation X times, that node will host X osds.
         mountpoint_path (str): Path to mount CephFS to on ALL nodes.
+        osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
+        osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
+        storage_size (str): Amount of bytes of RAM to allocate on each node. Value must use size indicator B, KiB, MiB, GiB, TiB.
         silent (bool): If set, prints are less verbose.
         retries (int): Number of retries for potentially failing operations.
 
@@ -168,7 +177,7 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
         if not silent:
             prints('Started managers')
             print('Editing configs...')
-        if not (update_config(ceph_nodes, ceph_deploypath, silent) and restart_monitors(monitors, silent)):
+        if not (update_config(ceph_nodes, ceph_deploypath, osd_op_threads, osd_pool_size, storage_size, silent) and restart_monitors(monitors, silent)):
             return False
         if not silent:
             prints('Edited configs')
@@ -189,15 +198,15 @@ def start_rados(reservation_str, mountpoint_path, silent, retries):
             x.result()
 
         destroy_pools(silent) # Must destroy old pools
-        stop_osds(osds, silent) # OSDs are halted to ensure no side-effects occur when calling this function multiple times.
+        stop_osds_memstore(osds, silent) # OSDs are halted to ensure no side-effects occur when calling this function multiple times.
         if not silent:
             prints('Stopped old OSDs')
             print('Booting OSDs...')
 
         futures_start_osds = []
         for x in osds:
-            num_osds = len([1 for y in x.extra_info['designations'].split(',') if y == Designation.MON.name.lower()])
-            futures_start_osds.append(executor.submit(start_osd, x, connectionwrappers[x].connection, num_osds, silent))
+            num_osds = len([1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()])
+            futures_start_osds.append(executor.submit(start_osd_memstore, x, connectionwrappers[x].connection, num_osds, silent))
         if not all(x.result() for x in futures_start_osds):
             return False
 

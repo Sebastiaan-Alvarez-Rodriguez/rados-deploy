@@ -10,13 +10,13 @@ Requires:
 
 def create_monitors(monitors, ceph_deploypath, silent):
     '''Creates new monitor nodes.'''
-    cmd = '{} new {}'.format(ceph_deploypath, ' '.join(x.hostname for x in monitors))
+    cmd = '{} -q new {}'.format(ceph_deploypath, ' '.join(x.hostname for x in monitors))
     return subprocess.call(cmd, **get_subprocess_kwargs(silent)) == 0
 
 
 def start_monitors(ceph_deploypath, silent):
     '''Start monitor nodes.'''
-    cmd = '{} --overwrite-conf mon create-initial'.format(ceph_deploypath)
+    cmd = '{} -q --overwrite-conf mon create-initial'.format(ceph_deploypath)
     return subprocess.call(cmd, **get_subprocess_kwargs(silent)) == 0
 
 
