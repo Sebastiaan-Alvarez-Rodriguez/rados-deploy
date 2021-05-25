@@ -13,7 +13,8 @@ def subparser(subparsers):
     deployparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the Ceph admin node.')
     deployparser.add_argument('--mountpoint', metavar='path', type=str, default=start_defaults.mountpoint_path(), help='Mountpoint for CephFS on all nodes (default={}).'.format(start_defaults.mountpoint_path()))
     deployparser.add_argument('--stripe', metavar='amount', type=int, default=defaults.stripe(), help='Striping, in megabytes (default={}MB). Must be a multiple of 4. Make sure that every file is smaller than set stripe size.'.format(defaults.stripe()))
-    deployparser.add_argument('--multiplier', metavar='amount', type=int, default=1, help='Data multiplier (default=1). Every file copied will receive "amount"-1 of hardlinks, to make the data look "amount" times larger.')
+    deployparser.add_argument('--copy-multiplier', metavar='amount', dest='copy_multiplier', type=int, default=1, help='Copy multiplier (default=1). Every file will be copied "amount"-1 times on the remote, to make the data look "amount" times larger. This multiplier is applied first.')
+    deployparser.add_argument('--link-multiplier', metavar='amount', dest='link_multiplier', type=int, default=1, help='Link multiplier (default=1). Every file will receive "amount"-1 hardlinks on the remote, to make the data look "amount" times larger. This multiplier is applied second. Note that we first apply the copy multiplier, meaning: the link multiplier is applied on copies of files, and the dataset inflation stacks.')
     deployparser.add_argument('--silent', help='If set, less boot output is shown.', action='store_true')
     return [deployparser]
 
@@ -29,4 +30,4 @@ def deploy_args_set(args):
 
 def deploy(parsers, args):
     reservation = _cli_util.read_reservation_cli()
-    return _deploy(reservation, paths=args.paths, key_path=args.key_path, admin_id=args.admin_id, stripe=args.stripe, multiplier=args.multiplier, mountpoint_path=args.mountpoint, silent=args.silent) if reservation else False
+    return _deploy(reservation, paths=args.paths, key_path=args.key_path, admin_id=args.admin_id, stripe=args.stripe, copy_multiplier=args.copy_multiplier, link_multiplier=args.link_multiplier, mountpoint_path=args.mountpoint, silent=args.silent) if reservation else False
