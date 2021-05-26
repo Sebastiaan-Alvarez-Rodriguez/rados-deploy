@@ -6,7 +6,7 @@ import rados_deploy.internal.util.fs as fs
 import rados_deploy.internal.util.importer as importer
 from rados_deploy.internal.util.printer import *
 
-import rados_deploy.start._internal as _internal
+from rados_deploy.start._internal import _pick_admin as _internal_pick_admin
 
 
 def _start_rados(remote_connection, module, reservation, mountpoint_path, osd_op_threads, osd_pool_size, storage_size, silent=False, retries=5):
@@ -62,7 +62,7 @@ def memstore(reservation, key_path=None, admin_id=None, mountpoint_path=defaults
     if not reservation or len(reservation) == 0:
         raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
 
-    admin_picked, _ = _internal._pick_admin(reservation, admin=admin_id)
+    admin_picked, _ = _internal_pick_admin(reservation, admin=admin_id)
     printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
 
     ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}

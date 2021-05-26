@@ -7,7 +7,7 @@ import rados_deploy.internal.util.fs as fs
 import rados_deploy.internal.util.importer as importer
 from rados_deploy.internal.util.printer import *
 
-import rados_deploy.start._internal as _internal
+from rados_deploy.start._internal import _pick_admin as _internal_pick_admin
 
 
 def _start_rados(remote_connection, module, reservation, mountpoint_path, osd_op_threads, osd_pool_size, silent=False, retries=5):
@@ -74,7 +74,7 @@ def bluestore(reservation, key_path=None, admin_id=None, mountpoint_path=default
             printe('Missing "device_path" specifier on the following nodes:\n{}'.format('\n'.join('\t{}'.format(x) for x in reservation.nodes if 'designations' in x.extra_info and Designation.OSD.name.lower() in x.extra_info['designations'].split(',') and not 'device_path' in x.extra_info)))
             return False, None
 
-    admin_picked, _ = _internal._pick_admin(reservation, admin=admin_id)
+    admin_picked, _ = _internal_pick_admin(reservation, admin=admin_id)
     printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
 
     ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
