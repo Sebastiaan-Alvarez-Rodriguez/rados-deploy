@@ -15,8 +15,7 @@ def _get_modules():
     import rados_deploy.cli.start as start
     import rados_deploy.cli.data.data as data
     import rados_deploy.cli.stop as stop
-    import rados_deploy.cli.restart as restart
-    return [install, start, data, stop, restart]
+    return [install, start, data, stop]
 
 
 def generic_args(parser):

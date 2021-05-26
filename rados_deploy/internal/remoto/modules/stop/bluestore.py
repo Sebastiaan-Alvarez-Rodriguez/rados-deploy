@@ -17,7 +17,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def stop_rados(reservation_str, mountpoint_path, silent):
+def stop_rados_bluestore(reservation_str, mountpoint_path, silent):
     '''Stops a Ceph cluster.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -74,7 +74,7 @@ def stop_rados(reservation_str, mountpoint_path, silent):
         if not silent:
             prints('Unmounted CephFS mountpoints')
             print('Stopping OSDs...')
-        stop_osds(osds, silent) # OSDs are halted to ensure no side-effects occur when calling this function multiple times.
+        stop_osds_bluestore(osds, silent) # OSDs are halted to ensure no side-effects occur when calling this function multiple times.
         if not silent:
             prints('Stopped OSDs')
             print('Stopping monitors...')
