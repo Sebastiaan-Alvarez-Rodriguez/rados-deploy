@@ -15,7 +15,7 @@ def subparser(subparsers):
     
     memstoreparser = subsubparsers.add_parser('memstore', help='''Stop a memstore cluster.''')
     bluestoreparser = subsubparsers.add_parser('bluestore', help='''Stop a bluestore cluster.''')
-    return [startparser, memstoreparser, bluestoreparser]
+    return [stopparser, memstoreparser, bluestoreparser]
 
 
 def deploy_args_set(args):
