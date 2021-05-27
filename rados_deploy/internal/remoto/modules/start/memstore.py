@@ -96,7 +96,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, storage_size, silent, retries):
+def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, storage_size, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -106,6 +106,7 @@ def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_p
         mountpoint_path (str): Path to mount CephFS to on ALL nodes.
         osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
         osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
+        placement_groups (int): Number of placement groups to use.
         storage_size (str): Amount of bytes of RAM to allocate on each node. Value must use size indicator B, KiB, MiB, GiB, TiB.
         silent (bool): If set, prints are less verbose.
         retries (int): Number of retries for potentially failing operations.
@@ -226,7 +227,7 @@ def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_p
         if not silent:
             prints('Started MDSs')
             print('Starting CephFS...')
-        if not create_pools(silent):
+        if not create_pools(placement_groups, silent):
             return False
 
         futures_stop_cephfs = [executor.submit(stop_cephfs, connectionwrappers[x].connection, mountpoint_path, silent) for x in reservation.nodes]
