@@ -231,8 +231,6 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
     copies_to_add = max(1, copy_multiplier) - 1
     links_to_add = max(1, link_multiplier) - 1
     with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
-        futures_prepare = []
-
         files_to_deploy = []
         for path in paths:
             if fs.isfile(path):

@@ -32,11 +32,11 @@ def deploy(parsers, args):
     if args.subcommand == 'memstore':
         from rados_deploy.stop import memstore
         reservation = _cli_util.read_reservation_cli()
-        return memstore(reservation, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, silent=args.silent)[0] if reservation else False
+        return memstore(reservation, args.install_dir, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, silent=args.silent)[0] if reservation else False
     elif args.subcommand == 'bluestore':
         from rados_deploy.stop import bluestore
         reservation = _cli_util.read_reservation_cli()
-        return bluestore(reservation, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, silent=args.silent)[0] if reservation else False
+        return bluestore(reservation, args.install_dir, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, silent=args.silent)[0] if reservation else False
     else: # User did not specify what type of storage type to use.
         printe('Did not provide a storage type (e.g. bluestore).')
         parsers[0].print_help()

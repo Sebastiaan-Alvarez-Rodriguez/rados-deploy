@@ -2,7 +2,7 @@ from metareserve import Reservation as _Reservation
 from rados_deploy.internal.util.printer import *
 
 def read_reservation_cli():
-    '''Read `MetaReserve.` from user input.'''
+    '''Read `metareserve.Reservation` from user input.'''
     print('Paste Reservation string here. Use <enter> twice to finish.')
     lines = []
     while True:
