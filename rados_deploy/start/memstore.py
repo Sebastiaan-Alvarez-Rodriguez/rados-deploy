@@ -63,7 +63,7 @@ def memstore(reservation, key_path=None, admin_id=None, mountpoint_path=defaults
     if not reservation or len(reservation) == 0:
         raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
 
-    if isinstance(placement_groups, int)
+    if isinstance(placement_groups, int):
         if placement_groups < 1:
             raise ValueError('Amount of placement groups must be higher than zero!')
     else: # We assume `placememt_groups = None`

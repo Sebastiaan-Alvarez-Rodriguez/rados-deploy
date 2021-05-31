@@ -25,7 +25,7 @@ def _compute_placement_groups(num_osds=None, reservation=None, num_pools=3):
     if num_osds == None and reservation == None:
         raise ValueError('Either need number of osds or reservation for computing placement groups.')
     if not num_osds:
-        num_osds = counted_total_osds = sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in osds])
+        num_osds = counted_total_osds = sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in reservation.nodes if 'designations' in x.extra_info])
     num_pgs = (num_osds * 100) / num_pools
 
     pow2_pg = 2**(math.ceil(num_pgs/2)-1).bit_length()
