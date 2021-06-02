@@ -1,5 +1,6 @@
-import setuptools
 import os
+import setuptools
+import shutil
 
 
 def read(fname):

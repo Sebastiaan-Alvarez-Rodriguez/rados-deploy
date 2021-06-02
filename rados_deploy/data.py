@@ -5,101 +5,13 @@ import subprocess
 
 import remoto.process
 
-from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+import rados_deploy.internal.defaults.start as start_defaults
+import rados_deploy.internal.defaults.data as defaults
+from rados_deploy.internal.remoto.ssh_wrapper import get_wrapper, close_wrappers
 import rados_deploy.internal.util.fs as fs
+import rados_deploy.internal.util.importer
 from rados_deploy.internal.util.printer import *
 
-
-def _default_stripe():
-    return 64 # 64MB
-
-
-def _default_mountpoint_path():
-    return '/mnt/cephfs'
-
-
-def _pre_deploy_remote_file(connection, stripe, copies_amount, links_amount, source_file, dest_file):
-    remoto.process.check(connection, 'mkdir -p {}'.format(fs.dirname(dest_file)), shell=True)
-    _, _, exitcode = remoto.process.check(connection, 'touch {}'.format(dest_file), shell=True)
-    if exitcode != 0:
-        printe('Could not touch file at cluster: {}'.format(dest_file))
-        return False
-
-    if copies_amount > 0:
-        cmd = '''python3 -c "
-import shutil
-srcloc = '{0}'
-for x in range({1}):
-    dstloc = '{0}.copy.{{}}'.format(x)
-    shutil.copyfile(srcloc, dstloc)
-exit(0)
-"
-'''.format(dest_file, copies_amount)
-        out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-        if exitcode != 0:
-            printe('Could not add copies for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
-            return False
-
-    if links_amount > 0:
-        cmd = '''python3 -c "
-import itertools
-import os
-for pointedloc in itertools.chain(['{0}'], ('{0}.copy.{{}}'.format(x) for x in range({2}))):
-    for x in range({1}):
-        pointerloc = '{{}}.link.{{}}'.format(pointedloc, x)
-        if os.path.exists(pointerloc):
-            os.remove(pointerloc)
-        os.link(pointedloc, pointerloc)
-exit(0)
-"
-'''.format(dest_file, links_amount, copies_amount)
-        out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-        if exitcode != 0:
-            printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
-            return False
-
-    cmd = '''sudo python3 -c "
-import itertools
-import subprocess
-import concurrent.futures
-from multiprocessing import cpu_count
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
-    futures_setfattr = [executor.submit(subprocess.call, 'setfattr --no-dereference -n ceph.file.layout.object_size -v {2} {{}}'.format(x), shell=True) for x in itertools.chain(['{0}'], ('{0}.copy.{{}}'.format(x) for x in range({1})))]
-    results = [x.result() == 0 for x in futures_setfattr]
-exit(0 if all(results) else 1)
-"
-'''.format(dest_file, copies_amount, stripe*1024*1024)
-    out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-    if exitcode != 0:
-        printe('Could not stripe file{} at cluster: {}. Is the cluster running?\nReason: Out: {}\n\nError: {}'.format(' (and all {} copies)'.format(copies_amount) if copies_amount > 0 else '', dest_file, '\n'.join(out), '\n'.join(error)))
-        return False
-    return True
-
-
-def _post_deploy_remote_file(connection, stripe, copies_amount, links_amount, source_file, dest_file):
-    if copies_amount > 0:
-        cmd = '''python3 -c "
-import subprocess
-import concurrent.futures
-from multiprocessing import cpu_count
-with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
-    futures_rsync = [executor.submit(subprocess.call, 'rsync -q -aHAX --inplace {0} {{}}'.format(x), shell=True) for x in ('{0}.copy.{{}}'.format(x) for x in range({1}))]
-    results = [x.result() == 0 for x in futures_rsync]
-exit(0 if all(results) else 1)
-"
-'''.format(dest_file, copies_amount)
-        _, _, exitcode = remoto.process.check(connection, cmd, shell=True)
-        if exitcode != 0:
-            printe('Could not inflate dataset using {} copies of file at cluster: {}. Is there enough space?'.format(copies_amount, dest_file))
-            return False
-    return True
-
-
-def _ensure_attr(connection):
-    '''Installs the 'attr' package, if not available.'''
-    _, _, exitcode = remoto.process.check(connection, 'which setfattr', shell=True)
-    if exitcode != 0:
-        remoto.process.check(connection, 'sudo apt install attr -y', shell=True)
 
 
 def _pick_admin(reservation, admin=None):
@@ -120,13 +32,7 @@ def _pick_admin(reservation, admin=None):
         return tmp[0], tmp[1:]
 
 
-def _merge_kwargs(x, y):
-    z = x.copy()
-    z.update(y)
-    return z
-
-
-def clean(reservation, paths, key_path=None, admin_id=None, mountpoint_path=_default_mountpoint_path(), silent=False):
+def clean(reservation, paths, key_path=None, admin_id=None, connectionwrapper=None, mountpoint_path=start_defaults.mountpoint_path(), silent=False):
     '''Cleans data from the RADOS-Ceph cluster, on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
@@ -144,21 +50,23 @@ def clean(reservation, paths, key_path=None, admin_id=None, mountpoint_path=_def
     admin_picked, _ = _pick_admin(reservation, admin=admin_id)
     print('Picked admin node: {}'.format(admin_picked))
 
-    ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
-    if key_path:
-        ssh_kwargs['IdentityFile'] = key_path
+    local_connections = connectionwrapper == None
+    if local_connections:
+        ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
+        if key_path:
+            ssh_kwargs['IdentityFile'] = key_path
 
-    connection = _get_ssh_connection(admin_picked.ip_public, silent=True, ssh_params=ssh_kwargs)
+        connectionwrapper = get_wrapper(admin_picked.ip_public, silent=True, ssh_params=ssh_kwargs)
 
     if not any(paths):
-        _, _, exitcode = remoto.process.check(connection.connection, 'sudo rm -rf {}/*'.format(mountpoint_path), shell=True)
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo rm -rf {}/*'.format(mountpoint_path), shell=True)
         state_ok = exitcode == 0
     else:
         paths = [x if x[0] != '/' else x[1:] for x in paths]
         with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
             if not silent:
                 print('Deleting data...')
-            futures_rm = [executor.submit(remoto.process.check, connection.connection, 'sudo rm -rf {}'.format(fs.join(mountpoint_path, path)), shell=True) for path in paths]
+            futures_rm = [executor.submit(remoto.process.check, connectionwrapper.connection, 'sudo rm -rf {}'.format(fs.join(mountpoint_path, path)), shell=True) for path in paths]
 
             state_ok = all(x.result()[2] == 0 for x in futures_rm)
 
@@ -166,11 +74,13 @@ def clean(reservation, paths, key_path=None, admin_id=None, mountpoint_path=_def
         prints('Data deleted.')
     else:
         printe('Could not delete data.')
+    if local_connections:
+        close_wrappers([connectionwrapper])
     return state_ok
 
 
 
-def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_default_stripe(), copy_multiplier=1, link_multiplier=1, mountpoint_path=_default_mountpoint_path(), silent=False):
+def deploy(reservation, paths=None, key_path=None, admin_id=None, connectionwrapper=None, stripe=defaults.stripe(), copy_multiplier=1, link_multiplier=1, mountpoint_path=start_defaults.mountpoint_path(), silent=False):
     '''Deploy data on remote RADOS-Ceph clusters, on an existing reservation.
     Dataset sizes can be inflated on the remote, using 2 strategies:
      1. link multiplication: Every dataset file receives `x` hardlinks.
@@ -193,6 +103,7 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        connectionwrapper (optional RemotoSSHWrapper): If set, uses given connection, instead of building a new one.
         paths (optional list(str)): Data paths to offload to the remote cluster. Can be relative to CWD or absolute.
         stripe (optional int): Ceph object stripe property, in megabytes.
         copy_multiplier (optional int): If set to a value `x`, makes the dataset appear `x` times larger by copying every file `x`-1 times. Does nothing if `x`<=1.
@@ -202,80 +113,13 @@ def deploy(reservation, paths=None, key_path=None, admin_id=None, stripe=_defaul
 
     Returns:
         `True` on success, `False` otherwise.'''
-    if not reservation or len(reservation) == 0:
-        raise ValueError('Reservation does not contain any items'+(' (reservation=None)' if not reservation else ''))
-    if stripe < 4:
-        raise ValueError('Stripe size must be equal to or greater than 4MB (and a multiple of 4MB)!')
-    if stripe % 4 != 0:
-        raise ValueError('Stripe size must be a multiple of 4MB!')
-    if not any(paths):
-        printw('No paths to deploy. Done.')
-        return True
-
-    admin_picked, _ = _pick_admin(reservation, admin=admin_id)
-    print('Picked admin node: {}'.format(admin_picked))
-
-    ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
-    if key_path:
-        ssh_kwargs['IdentityFile'] = key_path
-
-    connectionwrapper = _get_ssh_connection(admin_picked.ip_public, silent=True, ssh_params=ssh_kwargs)
-    if not connectionwrapper:
-        printe('Could not connect to admin: {}'.format(admin_picked))
-        return False
-    paths = [fs.abspath(x) for x in paths]
-
-    _ensure_attr(connectionwrapper.connection)
-
-    max_filesize = stripe * 1024 * 1024
-    copies_to_add = max(1, copy_multiplier) - 1
-    links_to_add = max(1, link_multiplier) - 1
-    with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
-        files_to_deploy = []
-        for path in paths:
-            if fs.isfile(path):
-                if os.path.getsize(path) > max_filesize:
-                    printe('File {} is too large ({} bytes, max allowed is {} bytes)'.format(path, os.path.getsize(path), max_filesize))
-                    return False
-                files_to_deploy.append((path, fs.join(mountpoint_path, fs.basename(path))))
-            elif fs.isdir(path):
-                to_visit = [path]
-                path_len = len(path)
-                while any(to_visit):
-                    visit_now = to_visit.pop()
-                    to_visit += list(fs.ls(visit_now, only_dirs=True, full_paths=True))
-                    files = list(fs.ls(visit_now, only_files=True, full_paths=True))
-                    files_too_big = [x for x in files if os.path.getsize(x) > max_filesize]
-                    if any(files_too_big):
-                        for x in files_too_big:
-                            printe('File {} is too large ({} bytes, max allowed is {} bytes)'.format(x, os.path.getsize(x), max_filesize))
-                        return False
-                    files_to_deploy += [(x, fs.join(mountpoint_path, x[path_len+1:])) for x in files]
-        futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
-        if not all(x.result() for x in futures_pre_deploy):
-            printe('Pre-data deployment error occured.')
-            return False
-
-        if not silent:
-            print('Transferring data...')
-        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAX --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
-        futures_rsync = [executor.submit(fun, path) for path in paths]
-
-        if not all(x.result() for x in futures_rsync):
-            printe('Data deployement error occured.')
-            return False
-
-        futures_post_deploy = [executor.submit(_post_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
-        if all(x.result() for x in futures_pre_deploy):
-            prints('Data deployment success')
-            return True
-        else:
-            printe('Post-data deployment error occured.')
-            return False
+    module = importer.import_full_path(fs.join(fs.dirname(fs.abspath(__file__)), 'internal', 'data_deploy', 'rados_deploy.deploy.plugin.py'))
+    args = []
+    kwargs = {'admin_id': admin_id, 'connectionwrapper': connectionwrapper, 'stripe': stripe, 'copy_multiplier': copy_multiplier, 'link_multiplier': link_multiplier}
+    return module.execute(reservation, key_path, paths, dest, silent, *args, **kwargs)
 
 
-
-def generate(reservation, key_path=None, admin_id=None, cmd=None, paths=None, stripe=_default_stripe(), multiplier=1, mountpoint_path=_default_mountpoint_path(), silent=False):
+def generate(reservation, key_path=None, admin_id=None, cmd=None, paths=None, stripe=defaults.stripe(), multiplier=1, mountpoint_path=start_defaults.mountpoint_path(), silent=False):
     '''Deploy data on the RADOS-Ceph cluster, on an existing reservation.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to start RADOS-Ceph on.

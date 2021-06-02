@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) # Appends main project root as importpath.
 
 import rados_deploy
+import rados_deploy.internal.data_deploy.plugin as plugin
 
 def _get_modules():
     import rados_deploy.cli.install as install
@@ -41,6 +42,7 @@ def deploy(mainparser, parsers, args):
 
 
 def main():
+    plugin.install()
     parser = argparse.ArgumentParser(
         prog='rados-deploy',
         formatter_class=argparse.RawTextHelpFormatter,

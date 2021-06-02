@@ -6,7 +6,7 @@ import tempfile
 from rados_deploy import Designation
 import rados_deploy.internal.defaults.install as defaults
 from rados_deploy.internal.remoto.modulegenerator import ModuleGenerator
-from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+from rados_deploy.internal.remoto.ssh_wrapper import get_wrapper, get_wrappers, close_wrappers
 import rados_deploy.internal.util.fs as fs
 import rados_deploy.internal.util.importer as importer
 import rados_deploy.internal.util.location as loc
@@ -106,11 +106,12 @@ def _check_users(reservation):
     return not any(x for x in nodes[1:] if x.extra_info['user'] != known_user)
 
 
-def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, use_sudo=defaults.use_sudo()):
+def install_ssh(reservation, connectionwrappers=None, key_path=None, cluster_keypair=None, silent=False, use_sudo=defaults.use_sudo()):
     '''Installs ssh keys in the cluster for internal traffic.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Args:
         reservation (`metareserve.Reservation`): Reservation object with all nodes to install RADOS-Ceph on.
+        connectionwrappers (optional dict(metareserve.Node, RemotoSSHWrapper)): If set, uses given connections, instead of building new ones.
         install_dir (str): Location on remote host to install RADOS-Ceph in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         cluster_keypair (optional tuple(str,str)): Keypair of (private, public) key to use for internal comms within the cluster. If `None`, a keypair will be generated.
@@ -122,14 +123,15 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
         printe('Found different usernames between nodes. All nodes must have the same user login!')
         return False
     user = list(reservation.nodes)[0].extra_info['user']
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
+    
+    local_connections = connectionwrappers == None
+
+    if local_connections:
         ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': user, 'StrictHostKeyChecking': 'no'}
         if key_path:
             ssh_kwargs['IdentityFile'] = key_path
-
-        futures_connection = {x: executor.submit(_get_ssh_connection, x.ip_public, silent=silent, ssh_params=ssh_kwargs) for x in reservation.nodes}
-        connectionwrappers = {node: future.result() for node, future in futures_connection.items()}
-        
+        connectionwrappers = get_wrappers(reservation.nodes, lambda node: node.ip_public, ssh_params=ssh_kwargs, silent=silent)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
         ssh_module = _generate_module_ssh()
 
         futures_ssh_installed = {node: executor.submit(_installed_ssh, wrapper.connection, ssh_module, keypair=cluster_keypair) for node, wrapper in connectionwrappers.items()}
@@ -143,17 +145,22 @@ def install_ssh(reservation, key_path=None, cluster_keypair=None, silent=False, 
             if not internal_keypair:
                 internal_keypair = _make_keypair()
             futures_ssh_install = {node: executor.submit(_install_ssh, wrapper.connection, ssh_module, reservation, internal_keypair, user, use_sudo=use_sudo) for node, wrapper in connectionwrappers.items()}
+            if local_connections:
+                close_wrappers(connectionwrappers.values())
             state_ok = True
             for node, ssh_future in futures_ssh_install.items():
                 if not ssh_future.result():
                     printe('Could not setup internal ssh key for node: {}'.format(node))
                     state_ok = False
             return state_ok
-        prints('SSH keys already installed.')
-        return True
+        else:
+            prints('SSH keys already installed.')
+            if local_connections:
+                close_wrappers(connectionwrappers.values())
+            return True
 
 
-def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, arrow_url=defaults.arrow_url(), use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
+def install(reservation, install_dir=defaults.install_dir(), key_path=None, admin_id=None, connectionwrapper=None, arrow_url=defaults.arrow_url(), use_sudo=defaults.use_sudo(), force_reinstall=False, debug=False, silent=False, cores=defaults.cores()):
     '''Installs RADOS-ceph on remote cluster.
     Warning: Requires that usernames on remote cluster nodes are equivalent.
     Warning: Requires passwordless communication between nodes on the local network. Use "install_ssh()" to accomplish this.
@@ -162,6 +169,7 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
         install_dir (optional str): Location on remote host to compile RADOS-arrow in.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id that must become the admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        connectionwrapper (optional RemotoSSHWrapper): If set, uses given connection, instead of building a new one.
         arrow_url (optional str): Download URL for Arrow library to use with RADOS-Ceph.
         use_sudo (optional bool): If set, uses sudo during installation. Tries to avoid it otherwise.
         force_reinstall (optional bool): If set, we always will re-download and install Arrow. Otherwise, we will skip installing if we already have installed Arrow.
@@ -177,11 +185,17 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
 
     admin_picked, _ = _pick_admin(reservation, admin=admin_id)
     printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
-        
-    ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
-    if key_path:
-        ssh_kwargs['IdentityFile'] = key_path
 
-    connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
+    local_connections = connectionwrappers == None
+
+    if local_connections:
+        ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
+        if key_path:
+            ssh_kwargs['IdentityFile'] = key_path
+        connectionwrapper = get_wrapper(admin_picked, admin_picked.ip_public, ssh_params=ssh_kwargs, silent=silent)
     rados_module = _generate_module_rados()
-    return _install_rados(connection.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
+    retval = _install_rados(wrapper.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
+
+    if local_connections:
+        close_wrappers([connectionwrappers])
+    return retval

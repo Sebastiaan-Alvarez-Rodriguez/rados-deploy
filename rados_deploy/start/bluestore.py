@@ -1,7 +1,7 @@
 from rados_deploy import Designation
 import rados_deploy.internal.defaults.start as defaults
 from rados_deploy.internal.remoto.modulegenerator import ModuleGenerator
-from rados_deploy.internal.remoto.util import get_ssh_connection as _get_ssh_connection
+from rados_deploy.internal.remoto.ssh_wrapper import get_wrapper, close_wrappers
 from rados_deploy.internal.util.byteconverter import to_bytes
 import rados_deploy.internal.util.fs as fs
 import rados_deploy.internal.util.importer as importer
@@ -46,7 +46,7 @@ def _generate_module_start(silent=False):
     return importer.import_full_path(generation_loc)
 
 
-def bluestore(reservation, key_path=None, admin_id=None, mountpoint_path=defaults.mountpoint_path(), osd_op_threads=defaults.osd_op_threads(), osd_pool_size=defaults.osd_pool_size(), placement_groups=None, device_path=None, silent=False, retries=defaults.retries()):
+def bluestore(reservation, key_path=None, admin_id=None, connectionwrapper=None, mountpoint_path=defaults.mountpoint_path(), osd_op_threads=defaults.osd_op_threads(), osd_pool_size=defaults.osd_pool_size(), placement_groups=None, device_path=None, silent=False, retries=defaults.retries()):
     '''Boot RADOS-Ceph on an existing reservation, running bluestore.
     Requires either a "device_path" key to be set in the extra info of all OSD nodes, or the "device_path" parameter must be set.
     Should point to device to use with bluestore on all nodes.
@@ -54,6 +54,7 @@ def bluestore(reservation, key_path=None, admin_id=None, mountpoint_path=default
         reservation (metareserve.Reservation): Reservation object with all nodes to start RADOS-Ceph on.
         key_path (optional str): Path to SSH key, which we use to connect to nodes. If `None`, we do not authenticate using an IdentityFile.
         admin_id (optional int): Node id of the ceph admin. If `None`, the node with lowest public ip value (string comparison) will be picked.
+        connectionwrapper (optional RemotoSSHWrapper): If set, uses given connection, instead of building a new one.
         mountpoint_path (optional str): Path where CephFS will be mounted on all nodes.
         osd_op_threads (optional int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
         osd_pool_size (optional int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
@@ -85,13 +86,19 @@ def bluestore(reservation, key_path=None, admin_id=None, mountpoint_path=default
     admin_picked, _ = _internal_pick_admin(reservation, admin=admin_id)
     printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
 
-    ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
-    if key_path:
-        ssh_kwargs['IdentityFile'] = key_path
+    local_connections = connectionwrapper == None
 
-    connection = _get_ssh_connection(admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
+    if local_connections:
+        ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
+        if key_path:
+            ssh_kwargs['IdentityFile'] = key_path
+        connectionwrapper = get_wrapper(admin_picked, admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
     rados_module = _generate_module_start()
-    state_ok = _start_rados(connection.connection, rados_module, reservation, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, silent=silent, retries=retries)
+    state_ok = _start_rados(connectionwrapper.connection, rados_module, reservation, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, silent=silent, retries=retries)
+
+    if local_connections:
+        close_wrappers([connectionwrapper])
+
     if state_ok:
         prints('Started RADOS-Ceph succeeded.')
         return True, admin_picked.node_id
