@@ -93,7 +93,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, silent, retries):
+def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, disable_client_cache, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -103,7 +103,8 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         mountpoint_path (str): Path to mount CephFS to on ALL nodes.
         osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
         osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
-        placement_groups (optional int): Amount of placement groups in Ceph. If not set, we use the recommended formula `(num osds * 100) / (pool size)`, as found here: https://ceph.io/pgcalc/.
+        placement_groups (int): Amount of placement groups in Ceph.
+        disable_client_cache (bool): If set, disables cephFS I/O cache.
         silent (bool): If set, prints are less verbose.
         retries (int): Number of retries for potentially failing operations.
 
@@ -145,17 +146,19 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
         ssh_kwargs = {'IdentitiesOnly': 'yes', 'StrictHostKeyChecking': 'no', 'IdentityFile': keyfile}
-        futures_connection = {x: executor.submit(get_ssh_connection, x.ip_public, loggername='admin_{}'.format(x.hostname), silent=silent, ssh_params=_merge_kwargs(ssh_kwargs, {'User': x.extra_info['user']})) for x in reservation.nodes}
-        connectionwrappers = {key: val.result() for key, val in futures_connection.items()}
+
+        connectionwrappers = get_wrappers(reservation.nodes, lambda node: node.ip_public, ssh_params=lambda node: _merge_kwargs(ssh_kwargs, {'User': node.extra_info['user']}), silent=silent)
 
         if any(True for x in connectionwrappers.values() if not x):
             printe('Could not connect to some nodes.')
+            close_wrappers(connectionwrappers)
             return False
 
         # Begin starting procedure
         if not silent:
             print('Starting monitors...')
         if not (create_monitors(monitors, ceph_deploypath, silent) and start_monitors(ceph_deploypath, silent) and send_config_with_keys(set(monitors).union(set(managers)), ceph_deploypath, silent)):
+            close_wrappers(connectionwrappers)
             return False
         if not silent:
             prints('Started monitors')
@@ -170,6 +173,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
             prints('Stopped managers')
             print('Starting managers...')
         if not start_managers(managers, ceph_deploypath, silent):
+            close_wrappers(connectionwrappers)
             return False
         if not silent:
             prints('Started managers')
@@ -180,10 +184,12 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
             prints('Edited configs')
             print('Deploying OSD keys...')
         if not copy_osd_keys(osds, silent):
+            close_wrappers(connectionwrappers)
             return False
 
         futures_install_osd_keys = [executor.submit(install_osd_key, connectionwrappers[x].connection, silent) for x in osds]
         if not all(x.result() for x in futures_install_osd_keys):
+            close_wrappers(connectionwrappers)
             return False
 
         if not silent:
@@ -205,6 +211,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
             num_osds = len([1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()])
             futures_start_osds.append(executor.submit(start_osd_bluestore, ceph_deploypath, x, num_osds, silent))
         if not all(x.result() for x in futures_start_osds):
+            close_wrappers(connectionwrappers)
             return False
 
         if not silent:
@@ -219,27 +226,32 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
             prints('Stopped old MDSs')
             print('Starting mdss...')
         if not start_mdss(mdss, ceph_deploypath, silent):
+            close_wrappers(connectionwrappers)
             return False
         if not silent:
             prints('Started MDSs')
             print('Starting CephFS...')
         if not create_pools(placement_groups, silent):
+            close_wrappers(connectionwrappers)
             return False
 
         futures_stop_cephfs = [executor.submit(stop_cephfs, connectionwrappers[x].connection, mountpoint_path, silent) for x in reservation.nodes]
         for x in futures_stop_cephfs:
             x.result()
 
-        futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, mountpoint_path, retries, silent) for x in reservation.nodes]    
+        futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, path=mountpoint_path, disable_cache=disable_client_cache, retries=retries, silent=silent) for x in reservation.nodes]    
         if not all(x.result() for x in futures_start_cephfs):
             printe('Not all nodes could setup mountpoints.')
+            close_wrappers(connectionwrappers)
             return False
 
         futures_chown_files = [executor.submit(chown_key_conf, connectionwrapper.connection, node.extra_info['user']) for node, connectionwrapper in connectionwrappers.items()]
         if not all(x.result() for x in futures_chown_files):
             printe('Could not chown ceph.conf and client keyring on every node')
+            close_wrappers(connectionwrappers)
             return False
 
         if not silent:
             prints('Ceph cluster ready!')
+        close_wrappers(connectionwrappers)
         return True

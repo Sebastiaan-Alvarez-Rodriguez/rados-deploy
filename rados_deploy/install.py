@@ -186,7 +186,7 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
     admin_picked, _ = _pick_admin(reservation, admin=admin_id)
     printc('Picked admin node: {}'.format(admin_picked), Color.CAN)
 
-    local_connections = connectionwrappers == None
+    local_connections = connectionwrapper == None
 
     if local_connections:
         ssh_kwargs = {'IdentitiesOnly': 'yes', 'User': admin_picked.extra_info['user'], 'StrictHostKeyChecking': 'no'}
@@ -194,8 +194,8 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
             ssh_kwargs['IdentityFile'] = key_path
         connectionwrapper = get_wrapper(admin_picked, admin_picked.ip_public, ssh_params=ssh_kwargs, silent=silent)
     rados_module = _generate_module_rados()
-    retval = _install_rados(wrapper.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
+    retval = _install_rados(connectionwrapper.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
 
     if local_connections:
-        close_wrappers([connectionwrappers])
+        close_wrappers([connectionwrapper])
     return retval

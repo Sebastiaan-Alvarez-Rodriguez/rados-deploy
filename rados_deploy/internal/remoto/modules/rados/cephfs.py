@@ -12,7 +12,7 @@ def stop_cephfs(connection, path='/mnt/cephfs', silent=False):
     remoto.process.check(connection, 'sudo fusermount -uz {}'.format(path), shell=True)
 
 
-def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=5, silent=False):
+def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', disable_cache=False, retries=5, silent=False):
     '''Starts cephFS on /mnt/cephfs.
     Warning: This function fails when cephfs is already mounted.
     Args:
@@ -35,9 +35,14 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', retries=
     remoto.process.check(connection, 'sudo rm -rf {0}/* && sudo rm -rf {0}/.*'.format(path), shell=True)
 
     state_ok = False
+
+    cmd = 'ceph-fuse'
+    if disable_cache:
+        cmd += ' -o direct_io'
+
     import time
     for x in range(retries):
-        _, _, exitcode = remoto.process.check(connection, 'sudo ceph-fuse {}'.format(path), shell=True)
+        _, _, exitcode = remoto.process.check(connection, 'sudo {} {}'.format(cmd, path), shell=True)
         if exitcode == 0:
             prints('[{}] Succesfully called ceph-fuse (attempt {}/{})'.format(node.hostname, x+1, retries))
             state_ok = True
