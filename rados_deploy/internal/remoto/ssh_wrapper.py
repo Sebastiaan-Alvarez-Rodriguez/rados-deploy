@@ -2,7 +2,7 @@ import concurrent.futures
 import tempfile
 import uuid
 
-import rados_deploy.thirdparty.sshconf as sshconf
+from rados_deploy.thirdparty.sshconf import *
 
 import logging
 import remoto
@@ -63,7 +63,7 @@ def _build_ssh_config(hostname, ssh_params):
         ssh_params = ssh_params(node)
     if not isinstance(ssh_params, dict):
         raise ValueError('ssh_params must be a dict, mapping ssh options to values. E.g: {{"IdentityFile": "/some/key.rsa", "IdentitiesOnly": "yes", "Port": 22}}')
-    conf = sshconf.empty_ssh_config_file()
+    conf = empty_ssh_config_file()
     conf.add(hostname, **ssh_params)
     tmpfile = tempfile.NamedTemporaryFile()
     conf.write(tmpfile.name)
@@ -151,13 +151,26 @@ def get_wrappers(nodes, hostnames, ssh_params=None, loggername=None, parallel=Tr
 def close_wrappers(wrappers, parallel=True):
     '''Closes an iterable of wrappers.
     Args:
-        wrappers (iterable of RemotoSSHWrapper): Wrappers to close.
+        wrappers (RemotoSSHWrapper, list(RemotoSSHWrapper), dict(RemotoSSHWrapper)): Wrappers to close.
         parallel (optional bool): If set, closes connections in parallel. Otherwise, closes connections sequentially.'''
+    if isinstance(wrappers, RemotoSSHWrapper):
+        closables = [wrappers]
+    elif isinstance(wrappers, dict):
+        if isinstance(list(wrappers.keys())[0], RemotoSSHWrapper):
+            closables = wrappers.keys()
+        elif isinstance(wrappers[list(wrappers.keys())[0]], RemotoSSHWrapper):
+            closables = wrappers.values()
+        else:
+            raise ValueError('Provided dict has no RemotoSSHWrapper keys(={}) or values(={})'.format(type(list(wrappers.keys())[0]), type(wrappers[list(wrappers.keys())[0]])))
+    elif isinstance(wrappers, list):
+        closables = wrappers
+    else:
+        raise ValueError('Cannot close given wrappers: No dict, list, or single wrapper passed: {}'.format(wrappers))
     if parallel:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(wrappers)) as executor:
-            futures_close = [executor.submit(x.exit) for x in wrappers]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(closables)) as executor:
+            futures_close = [executor.submit(x.exit) for x in closables]
             for x in futures_close:
                 x.result()
     else:
-        for x in wrappers:
+        for x in closables:
             x.exit()

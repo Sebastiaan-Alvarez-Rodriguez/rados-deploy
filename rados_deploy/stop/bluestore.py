@@ -13,7 +13,7 @@ def _stop_rados(remote_connection, module, reservation, mountpoint_path, silent=
 
 def _generate_module_stop(silent=False):
     '''Generates RADOS-Ceph-start module from available sources.'''
-    generation_loc = fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'generated', 'stop_rados.py')
+    generation_loc = fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'generated', 'stop_rados_bluestore.py')
     files = [
         fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'util', 'printer.py'),
         fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'printer.py'),

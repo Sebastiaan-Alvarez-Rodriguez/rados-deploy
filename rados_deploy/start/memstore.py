@@ -16,7 +16,7 @@ def _start_rados(remote_connection, module, reservation, mountpoint_path, osd_op
 
 def _generate_module_start(silent=False):
     '''Generates RADOS-Ceph-start module from available sources.'''
-    generation_loc = fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'generated', 'start_rados.py')
+    generation_loc = fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'generated', 'start_rados_memstore.py')
     files = [
         fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'util', 'printer.py'),
         fs.join(fs.dirname(fs.dirname(fs.abspath(__file__))), 'internal', 'remoto', 'modules', 'printer.py'),

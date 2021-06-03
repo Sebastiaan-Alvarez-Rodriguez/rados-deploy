@@ -146,7 +146,7 @@ def install_ssh(reservation, connectionwrappers=None, key_path=None, cluster_key
                 internal_keypair = _make_keypair()
             futures_ssh_install = {node: executor.submit(_install_ssh, wrapper.connection, ssh_module, reservation, internal_keypair, user, use_sudo=use_sudo) for node, wrapper in connectionwrappers.items()}
             if local_connections:
-                close_wrappers(connectionwrappers.values())
+                close_wrappers(connectionwrappers)
             state_ok = True
             for node, ssh_future in futures_ssh_install.items():
                 if not ssh_future.result():
@@ -156,7 +156,7 @@ def install_ssh(reservation, connectionwrappers=None, key_path=None, cluster_key
         else:
             prints('SSH keys already installed.')
             if local_connections:
-                close_wrappers(connectionwrappers.values())
+                close_wrappers(connectionwrappers)
             return True
 
 
