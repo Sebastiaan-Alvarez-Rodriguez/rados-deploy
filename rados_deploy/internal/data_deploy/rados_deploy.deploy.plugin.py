@@ -127,7 +127,7 @@ exit(0 if all(results) else 1)
     return True
 
 
-def _execute_internal(connectionwrapper, admin_node, reservation, paths, dest, silent, stripe, copy_multiplier, link_multiplier):
+def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_multiplier, link_multiplier, admin_node, stripe):
     if not connectionwrapper:
         printe('Could not connect to admin: {}'.format(admin_node))
         return False
@@ -193,13 +193,11 @@ def parse(args):
     parser = argparse.ArgumentParser(prog='...')
     parser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that will be the primary or admin node.')
     parser.add_argument('--stripe', metavar='amount', type=int, default=defaults.stripe(), help='Striping, in megabytes (default={}MB). Must be a multiple of 4. Make sure that every file is smaller than set stripe size.'.format(defaults.stripe()))
-    parser.add_argument('--copy-multiplier', metavar='amount', dest='copy_multiplier', type=int, default=1, help='Copy multiplier (default=1). Every file will be copied "amount"-1 times on the remote, to make the data look "amount" times larger. This multiplier is applied first.')
-    parser.add_argument('--link-multiplier', metavar='amount', dest='link_multiplier', type=int, default=1, help='Link multiplier (default=1). Every file will receive "amount"-1 hardlinks on the remote, to make the data look "amount" times larger. This multiplier is applied second. Note that we first apply the copy multiplier, meaning: the link multiplier is applied on copies of files, and the dataset inflation stacks.')
     args = parser.parse_args(args)
-    return True, [], {'admin_id': args.admin_id, 'stripe': args.stripe, 'copy_multiplier': args.copy_multiplier, 'link_multiplier': args.link_multiplier}
+    return True, [], {'admin_id': args.admin_id, 'stripe': args.stripe}
 
 
-def execute(reservation, key_path, paths, dest, silent, *args, **kwargs):
+def execute(reservation, key_path, paths, dest, silent, copy_multiplier, link_multiplier, *args, **kwargs):
     '''Deploy data on remote RADOS-Ceph clusters, on an existing reservation.
     Dataset sizes can be inflated on the remote, using 2 strategies:
      1. link multiplication: Every dataset file receives `x` hardlinks.
@@ -223,10 +221,7 @@ def execute(reservation, key_path, paths, dest, silent, *args, **kwargs):
         `True` on success, `False` otherwise.'''
     connectionwrapper = kwargs.get('connectionwrapper')
     admin_id = kwargs.get('admin_id')
-
     stripe = kwargs.get('stripe') or defaults.stripe()
-    copy_multiplier = kwargs.get('copy_multiplier') or 1
-    link_multiplier = kwargs.get('link_multiplier') or 1
 
     if stripe < 4:
         raise ValueError('Stripe size must be equal to or greater than 4MB (and a multiple of 4MB)!')
@@ -245,7 +240,7 @@ def execute(reservation, key_path, paths, dest, silent, *args, **kwargs):
         if not connectionwrapper.open:
             raise ValueError('Provided connection is not open.')
 
-    retval = _execute_internal(connectionwrapper, admin_node, reservation, paths, dest, silent, stripe, copy_multiplier, link_multiplier)
+    retval = _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_multiplier, link_multiplier, admin_node, stripe)
     if not use_local_connections:
         ssh_wrapper.close_wrappers([connectionwrapper])
     return retval
