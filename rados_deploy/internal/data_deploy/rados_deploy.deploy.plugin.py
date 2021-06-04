@@ -1,9 +1,11 @@
 import argparse
 import concurrent.futures
+import itertools
 from multiprocessing import cpu_count
 import os
 import subprocess
 
+import data_deploy
 import remoto
 
 import rados_deploy.internal.defaults.data as defaults
@@ -57,38 +59,11 @@ def _pre_deploy_remote_file(connection, stripe, copies_amount, links_amount, sou
         printe('Could not touch file at cluster: {}'.format(dest_file))
         return False
 
-    if copies_amount > 0:
-        cmd = '''python3 -c "
-import shutil
-srcloc = '{0}'
-for x in range({1}):
-    dstloc = '{0}.copy.{{}}'.format(x)
-    shutil.copyfile(srcloc, dstloc)
-exit(0)
-"
-'''.format(dest_file, copies_amount)
-        out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-        if exitcode != 0:
-            printe('Could not add copies for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
-            return False
+    if copies_amount > 0 and not data_deploy.shared.copy.copy_single(connection, dest_file, copies_amount, silent=False):
+        return False
 
-    if links_amount > 0:
-        cmd = '''python3 -c "
-import itertools
-import os
-for pointedloc in itertools.chain(['{0}'], ('{0}.copy.{{}}'.format(x) for x in range({2}))):
-    for x in range({1}):
-        pointerloc = '{{}}.link.{{}}'.format(pointedloc, x)
-        if os.path.exists(pointerloc):
-            os.remove(pointerloc)
-        os.link(pointedloc, pointerloc)
-exit(0)
-"
-'''.format(dest_file, links_amount, copies_amount)
-        out, error, exitcode = remoto.process.check(connection, cmd, shell=True)
-        if exitcode != 0:
-            printe('Could not add hardlinks for file: {}.\nReason: Out: {}\n\nError: {}'.format(dest_file, '\n'.join(out), '\n'.join(error)))
-            return False
+    if links_amount > 0 and not data_deploy.shared.link.link(connection, expression=data_deploy.shared.copy.copy_expression(dest_file, copies_amount), links_amount, silent=False):
+        return False
 
     cmd = '''sudo python3 -c "
 import itertools
