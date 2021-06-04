@@ -5,7 +5,9 @@ from multiprocessing import cpu_count
 import os
 import subprocess
 
-import data_deploy
+import data_deploy.shared.copy
+import data_deploy.shared.link
+
 import remoto
 
 import rados_deploy.internal.defaults.data as defaults
@@ -62,7 +64,7 @@ def _pre_deploy_remote_file(connection, stripe, copies_amount, links_amount, sou
     if copies_amount > 0 and not data_deploy.shared.copy.copy_single(connection, dest_file, copies_amount, silent=False):
         return False
 
-    if links_amount > 0 and not data_deploy.shared.link.link(connection, expression=data_deploy.shared.copy.copy_expression(dest_file, copies_amount), links_amount, silent=False):
+    if links_amount > 0 and not data_deploy.shared.link.link(connection, expression=data_deploy.shared.copy.copy_expression(dest_file, copies_amount), num_links=links_amount, silent=False):
         return False
 
     cmd = '''sudo python3 -c "
