@@ -131,6 +131,10 @@ def install_ssh(reservation, connectionwrappers=None, key_path=None, cluster_key
         if key_path:
             ssh_kwargs['IdentityFile'] = key_path
         connectionwrappers = get_wrappers(reservation.nodes, lambda node: node.ip_public, ssh_params=ssh_kwargs, silent=silent)
+    else:
+        if not all(x.open for x in connectionwrappers):
+            raise ValueError('SSH installation failed: At least one connection is already closed.')
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(reservation)) as executor:
         ssh_module = _generate_module_ssh()
 
@@ -145,13 +149,13 @@ def install_ssh(reservation, connectionwrappers=None, key_path=None, cluster_key
             if not internal_keypair:
                 internal_keypair = _make_keypair()
             futures_ssh_install = {node: executor.submit(_install_ssh, wrapper.connection, ssh_module, reservation, internal_keypair, user, use_sudo=use_sudo) for node, wrapper in connectionwrappers.items()}
-            if local_connections:
-                close_wrappers(connectionwrappers)
             state_ok = True
             for node, ssh_future in futures_ssh_install.items():
                 if not ssh_future.result():
                     printe('Could not setup internal ssh key for node: {}'.format(node))
                     state_ok = False
+            if local_connections:
+                close_wrappers(connectionwrappers)
             return state_ok
         else:
             prints('SSH keys already installed.')
@@ -193,6 +197,10 @@ def install(reservation, install_dir=defaults.install_dir(), key_path=None, admi
         if key_path:
             ssh_kwargs['IdentityFile'] = key_path
         connectionwrapper = get_wrapper(admin_picked, admin_picked.ip_public, ssh_params=ssh_kwargs, silent=silent)
+    else:
+        if not connectionwrapper.open:
+            raise ValueError('Cannot use already closed connection.')
+
     rados_module = _generate_module_rados()
     retval = _install_rados(connectionwrapper.connection, rados_module, reservation, install_dir, arrow_url=arrow_url, force_reinstall=force_reinstall, debug=debug, silent=silent, cores=cores), admin_picked.node_id
 
