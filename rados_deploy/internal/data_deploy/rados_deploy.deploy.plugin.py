@@ -143,7 +143,7 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
 
         if not silent:
             print('Transferring data...')
-        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAX --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_picked.ip_public, fs.join(mountpoint_path, fs.basename(path))), shell=True) == 0
+        fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAXL --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
         futures_rsync = [executor.submit(fun, path) for path in paths]
 
         if not all(x.result() for x in futures_rsync):

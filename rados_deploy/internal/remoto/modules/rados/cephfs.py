@@ -12,7 +12,7 @@ def stop_cephfs(connection, path='/mnt/cephfs', silent=False):
     remoto.process.check(connection, 'sudo fusermount -uz {}'.format(path), shell=True)
 
 
-def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', disable_cache=False, retries=5, silent=False):
+def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', use_client_cache=True, retries=5, silent=False):
     '''Starts cephFS on /mnt/cephfs.
     Warning: This function fails when cephfs is already mounted.
     Args:
@@ -20,7 +20,10 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', disable_
         connection (remoto.Connection): Connection to use for deploying.
         ceph_deploypath (str): Path to `ceph-deploy` executable.
         path (optional str): Path to mount CephFS on.
-
+        use_client_cache (optional bool): Toggles using CephFS I/O cache.
+        retries (optional int): Number of tries we try to perform potentially-crashing operations.
+        silent (optional bool): If set, does not print compilation progress, output, etc. Otherwise, all output will be printed.
+        
     Returns:
         `True` on success, `False` on failure.'''
     remoto.process.check(connection, 'sudo mkdir -p {}'.format(path), shell=True)
@@ -37,14 +40,17 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', disable_
     state_ok = False
 
     cmd = 'ceph-fuse'
-    if disable_cache:
+    if not use_client_cache:
         cmd += ' -o direct_io'
 
     import time
     for x in range(retries):
         _, _, exitcode = remoto.process.check(connection, 'sudo {} {}'.format(cmd, path), shell=True)
         if exitcode == 0:
-            prints('[{}] Succesfully called ceph-fuse (attempt {}/{})'.format(node.hostname, x+1, retries))
+            if use_client_cache:
+                prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (enabled I/O caching)'.format(node.hostname, x+1, retries))
+            else:
+                prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (disabled I/O caching)'.format(node.hostname, x+1, retries))
             state_ok = True
             break
         else:

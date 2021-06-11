@@ -93,7 +93,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, disable_client_cache, silent, retries):
+def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, use_client_cache, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -104,7 +104,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
         osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
         placement_groups (int): Amount of placement groups in Ceph.
-        disable_client_cache (bool): If set, disables cephFS I/O cache.
+        use_client_cache (bool): Toggles using cephFS I/O cache.
         silent (bool): If set, prints are less verbose.
         retries (int): Number of retries for potentially failing operations.
 
@@ -239,7 +239,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         for x in futures_stop_cephfs:
             x.result()
 
-        futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, path=mountpoint_path, disable_cache=disable_client_cache, retries=retries, silent=silent) for x in reservation.nodes]    
+        futures_start_cephfs = [executor.submit(start_cephfs, x, connectionwrappers[x].connection, ceph_deploypath, path=mountpoint_path, use_client_cache=use_client_cache, retries=retries, silent=silent) for x in reservation.nodes]    
         if not all(x.result() for x in futures_start_cephfs):
             printe('Not all nodes could setup mountpoints.')
             close_wrappers(connectionwrappers)
