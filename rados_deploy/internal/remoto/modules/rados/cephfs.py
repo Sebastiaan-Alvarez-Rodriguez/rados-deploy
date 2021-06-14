@@ -40,17 +40,12 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', use_clie
     state_ok = False
 
     cmd = 'ceph-fuse'
-    if not use_client_cache:
-        cmd += ' -o direct_io'
 
     import time
     for x in range(retries):
         _, _, exitcode = remoto.process.check(connection, 'sudo {} {}'.format(cmd, path), shell=True)
         if exitcode == 0:
-            if use_client_cache:
-                prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (enabled I/O caching)'.format(node.hostname, x+1, retries))
-            else:
-                prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (disabled I/O caching)'.format(node.hostname, x+1, retries))
+            prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (I/O caching={})'.format(node.hostname, x+1, retries, 'true' if use_client_cache else 'false'))    
             state_ok = True
             break
         else:

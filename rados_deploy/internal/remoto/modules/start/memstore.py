@@ -2,12 +2,13 @@ import subprocess
 import concurrent.futures
 
 
-def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, storage_size, silent):
+def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, use_client_cache, storage_size, silent):
     '''Edit ceph.config and push it to all nodes. By default, the config is found in admin home directory.
     Note: Afterwards, monitors must be restarted for the changes to take effect!'''
     path = join(os.path.expanduser('~/'), 'ceph.conf')
 
     rules = {
+        'fuse_disable_pagecache': 'false' if use_client_cache else 'true',
         'mon allow pool delete': 'true',
         'osd class load list': '*',
         'osd op threads': str(osd_op_threads),
@@ -181,7 +182,7 @@ def start_rados_memstore(reservation_str, mountpoint_path, osd_op_threads, osd_p
         if not silent:
             prints('Started managers')
             print('Editing configs...')
-        if not (update_config(ceph_nodes, ceph_deploypath, osd_op_threads, osd_pool_size, storage_size, silent) and restart_monitors(monitors, silent)):
+        if not (update_config(ceph_nodes, ceph_deploypath, osd_op_threads, osd_pool_size, use_client_cache, storage_size, silent) and restart_monitors(monitors, silent)):
             close_wrappers(connectionwrappers)
             return False
         if not silent:
