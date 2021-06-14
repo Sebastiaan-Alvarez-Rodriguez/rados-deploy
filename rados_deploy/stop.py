@@ -87,7 +87,7 @@ def stop(reservation, key_path=None, admin_id=None, connectionwrapper=None, moun
         if key_path:
             ssh_kwargs['IdentityFile'] = key_path
         connectionwrapper = get_wrapper(admin_picked, admin_picked.ip_public, silent=silent, ssh_params=ssh_kwargs)
-    
+
     rados_module = _generate_module_stop()
     state_ok = _stop_rados(connectionwrapper.connection, rados_module, reservation, mountpoint_path, silent=silent)
     
