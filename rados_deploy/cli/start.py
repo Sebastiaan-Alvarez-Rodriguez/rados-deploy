@@ -43,11 +43,11 @@ def deploy(parsers, args):
     if args.subcommand == 'memstore':
         from rados_deploy.start import memstore
         reservation = _cli_util.read_reservation_cli()
-        return memstore(reservation, args.install_dir, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, osd_op_threads=args.osd_op_threads, osd_pool_size=args.osd_pool_size, placement_groups=args.placement_groups, use_client_cache=not args.disable_client_cache, storage_size=args.storage_size, silent=args.silent, retries=args.retries)[0] if reservation else False
+        return memstore(reservation, key_path=args.key_path, admin_id=args.admin_id, mountpoint_path=args.mountpoint, osd_op_threads=args.osd_op_threads, osd_pool_size=args.osd_pool_size, placement_groups=args.placement_groups, use_client_cache=not args.disable_client_cache, storage_size=args.storage_size, silent=args.silent, retries=args.retries)[0] if reservation else False
     elif args.subcommand == 'bluestore':
         from rados_deploy.start import bluestore
         reservation = _cli_util.read_reservation_cli()
-        return bluestore(reservation, args.install_dir, args.key_path, args.admin_id, mountpoint_path=args.mountpoint, osd_op_threads=args.osd_op_threads, osd_pool_size=args.osd_pool_size, placement_groups=args.placement_groups, use_client_cache=not args.disable_client_cache, device_path=args.device_path, silent=args.silent, retries=args.retries)[0] if reservation else False
+        return bluestore(reservation, key_path=args.key_path, admin_id=args.admin_id, mountpoint_path=args.mountpoint, osd_op_threads=args.osd_op_threads, osd_pool_size=args.osd_pool_size, placement_groups=args.placement_groups, use_client_cache=not args.disable_client_cache, device_path=args.device_path, silent=args.silent, retries=args.retries)[0] if reservation else False
     else: # User did not specify what type of storage type to use.
         printe('Did not provide a storage type (e.g. bluestore).')
         parsers[0].print_help()

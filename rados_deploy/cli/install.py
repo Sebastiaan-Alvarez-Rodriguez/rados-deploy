@@ -36,4 +36,4 @@ def deploy(parsers, args):
         return False
     if not _install_ssh(reservation, key_path=args.key_path, cluster_keypair=None, silent=args.silent, use_sudo=args.use_sudo):
         return False
-    return _install(reservation, args.install_dir, args.key_path, args.admin_id, arrow_url=args.arrow_url, use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores)[0] if reservation else False
+    return _install(reservation, install_dir=args.install_dir, key_path=args.key_path, admin_id=args.admin_id, arrow_url=args.arrow_url, use_sudo=args.use_sudo, force_reinstall=args.force_reinstall, debug=args.debug, silent=args.silent, cores=args.cores)[0] if reservation else False
