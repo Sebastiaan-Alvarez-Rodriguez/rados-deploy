@@ -2,17 +2,29 @@ import subprocess
 import concurrent.futures
 
 
-def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, use_client_cache, silent):
+def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, osd_max_obj_size, use_client_cache, silent):
     '''Edit ceph.config and push it to all nodes. By default, the config is found in admin home directory.
-    Note: Afterwards, monitors must be restarted for the changes to take effect!'''
+    Note: Afterwards, monitors must be restarted for the changes to take effect!
+    Args:
+        nodes (list(metareserve.Node): List of nodes to update config for.
+        ceph_deploypath (str): Path to ceph_deploy executable.
+        osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
+        osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
+        osd_max_obj_size (int): Maximal object size in bytes. Normal=128*1024*1024 (128MB).
+        use_client_cache (bool): If set, enables clients to cache data.
+        silent (bool): If set, prints less output.
+
+    Returns:
+        `True` on success, `False` on failure.'''
     path = join(os.path.expanduser('~/'), 'ceph.conf')
 
     rules = {
-        'fuse_disable_pagecache': 'false' if use_client_cache else 'true',
+        'fuse disable pagecache': 'false' if use_client_cache else 'true',
         'mon allow pool delete': 'true',
         'osd class load list': '*',
         'osd op threads': str(osd_op_threads),
-        'osd pool default size': str(osd_pool_size)
+        'osd pool default size': str(osd_pool_size),
+        'osd_max_object_size': osd_max_obj_size,
     }
 
     import configparser
@@ -94,7 +106,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, placement_groups, use_client_cache, silent, retries):
+def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, osd_max_obj_size, placement_groups, use_client_cache, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -104,6 +116,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         mountpoint_path (str): Path to mount CephFS to on ALL nodes.
         osd_op_threads (int): Number of op threads to use for each OSD. Make sure this number is not greater than the amount of cores each OSD has.
         osd_pool_size (int): Fragmentation of object to given number of OSDs. Must be less than or equal to amount of OSDs.
+        osd_max_obj_size (int): Maximal object size in bytes. Normal=128*1024*1024 (128MB).
         placement_groups (int): Amount of placement groups in Ceph.
         use_client_cache (bool): Toggles using cephFS I/O cache.
         silent (bool): If set, prints are less verbose.
@@ -179,7 +192,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         if not silent:
             prints('Started managers')
             print('Editing configs...')
-        if not (update_config(ceph_nodes, ceph_deploypath, osd_op_threads, osd_pool_size, use_client_cache, silent) and restart_monitors(monitors, silent)):
+        if not (update_config(ceph_nodes, ceph_deploypath, osd_op_threads, osd_pool_size, osd_max_obj_size, use_client_cache, silent) and restart_monitors(monitors, silent)):
             return False
         if not silent:
             prints('Edited configs')

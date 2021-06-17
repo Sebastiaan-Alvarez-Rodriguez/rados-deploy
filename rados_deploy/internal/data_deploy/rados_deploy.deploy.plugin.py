@@ -144,10 +144,16 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not silent:
             print('Transferring data...')
         fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAXL --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
-        futures_rsync = [executor.submit(fun, path) for path in paths]
+        futures_rsync = {path, executor.submit(fun, path) for path in paths}
 
-        if not all(x.result() for x in futures_rsync):
-            printe('Data deployement error occured.')
+        state_ok = True
+        for path,future in futures_rsync.items():
+            if not silent:
+                print('Waiting on file: {}'.format(path))
+            if not future.result():
+                state_ok = False
+                printe('Could not transfer file: {}'.format(path))
+        if not state_ok:
             return False
 
         futures_post_deploy = [executor.submit(_post_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
