@@ -24,7 +24,7 @@ def update_config(nodes, ceph_deploypath, osd_op_threads, osd_pool_size, osd_max
         'osd class load list': '*',
         'osd op threads': str(osd_op_threads),
         'osd pool default size': str(osd_pool_size),
-        'osd_max_object_size': osd_max_obj_size,
+        'osd_max_object_size': str(osd_max_obj_size),
     }
 
     import configparser
