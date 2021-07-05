@@ -17,7 +17,7 @@ def install():
     for x in list_plugins():
         dst = fs.join(data_deploy_dst, fs.basename(x))
         if fs.exists(dst) or fs.issymlink(dst):
-            print('Found dst (removing): {}'.format(dst))
+            print('Updating data deploy plugin: {}'.format(dst))
             fs.rm(dst, ignore_errors=True)
         fs.ln(x, dst)
 

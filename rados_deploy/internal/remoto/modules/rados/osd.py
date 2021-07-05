@@ -41,7 +41,7 @@ def stop_osds_memstore(osds, silent):
     Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
 
 
-def stop_osds_bluestore(osds, silent):
+def stop_osds_bluestore(osds, device_path, silent):
     # stopping osds
     executors = [Executor('ssh {} "sudo systemctl stop ceph-osd.target"'.format(x.hostname), **get_subprocess_kwargs(silent)) for x in osds]
     Executor.run_all(executors)
@@ -69,7 +69,7 @@ def stop_osds_bluestore(osds, silent):
     Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
 
     # Stopping bluestore
-    executors = [Executor('ssh {} "sudo ceph-volume lvm zap {} --destroy"'.format(x.hostname, x.extra_info['device_path']), **get_subprocess_kwargs(silent)) for x in osds]
+    executors = [Executor('ssh {} "sudo ceph-volume lvm zap {} --destroy"'.format(x.hostname, x.extra_info['device_path'] if 'device_path' in x.extra_info else device_path), **get_subprocess_kwargs(silent)) for x in osds]
     Executor.run_all(executors)
     Executor.wait_all(executors, stop_on_error=False, print_on_error=False)
 

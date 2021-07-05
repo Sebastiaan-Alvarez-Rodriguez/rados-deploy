@@ -21,6 +21,9 @@ def _install_rados(connection, module, reservation, install_dir, arrow_url=defau
         printe('Could not install ceph-deploy.')
         return False
     hosts_designations_mapping = {x.hostname: [Designation[y.strip().upper()].name for y in x.extra_info['designations'].split(',')] if 'designations' in x.extra_info else [] for x in reservation.nodes}
+    if not any(any(v) for v in hosts_designations_mapping.values()):
+        printe('User did not provide designations=<designation> for any host!')
+        return False
     if not remote_module.install_ceph(hosts_designations_mapping, silent):
         printe('Could not install Ceph on some node(s).')
         return False

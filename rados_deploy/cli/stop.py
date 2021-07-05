@@ -1,5 +1,6 @@
 import rados_deploy.internal.defaults.start as start_defaults
 import rados_deploy.cli.util as _cli_util
+from rados_deploy.internal.util.printer import *
 
 
 '''CLI module to stop a running RADOS-Ceph cluster.'''
@@ -28,7 +29,6 @@ def deploy_args_set(args):
 
 
 def deploy(parsers, args):
-    reservation = _cli_util.read_reservation_cli()
     if args.subcommand == 'memstore':
         from rados_deploy.stop import memstore
         reservation = _cli_util.read_reservation_cli()
