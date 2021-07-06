@@ -44,16 +44,19 @@ def import_full_path(full_path):
     else:
         raise NotImplementedError('Did not implement existence check for Python >2.9 and <3.3')
 
-def __pip_installed(pip):
-    return subprocess.call('{} -h'.format(pip), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) == 0
+def __pip_installed(pip, silent=False):
+    kwargs = {'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL} if silent else {}
+    return subprocess.call('{} -h'.format(pip), shell=True, **kwargs) == 0
 
-def __pip_install0(py):
-    return subprocess.call('{} -m ensurepip'.format(py), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) == 0
+def __pip_install0(py, silent=False):
+    kwargs = {'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL} if silent else {}
+    return subprocess.call('{} -m ensurepip'.format(py), shell=True, **kwargs) == 0
 
-def __pip_install1(py):
-    if subprocess.call('sudo apt update -y', shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
+def __pip_install1(py, silent=False):
+    kwargs = {'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL} if silent else {}
+    if subprocess.call('sudo apt update -y', shell=True, **kwargs) != 0:
         return False
-    return subprocess.call('sudo apt install -y {}-pip'.format(py), shell=True) == 0 #, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+    return subprocess.call('sudo apt install -y {}-pip'.format(py), shell=True, **kwargs) == 0 #, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
 
 def __pip_install2(py, silent=False):
     url = 'https://bootstrap.pypa.io/get-pip.py'
@@ -71,30 +74,43 @@ def __pip_install2(py, silent=False):
                 break
             except Exception as e:
                 if x == 0:
-                    printw('Could not download get-pip. Retrying...')
+                    if not silent:
+                        printw('Could not download get-pip. Retrying...')
                 elif x == retries-1:
-                    printe('Could not download get-pip: {}'.format(e))
+                    if not silent:
+                        printe('Could not download get-pip: {}'.format(e))
                     return False
-        return subprocess.call('{} {}'.format(py, archiveloc), shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+
+        kwargs = {'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL} if silent else {}
+        return subprocess.call('{} {}'.format(py, archiveloc), shell=True, **kwargs) == 0
 
 
-def pip_install(py='python3', pip='pip3'):
-    '''Installs pip. The given `pip` argument determines the name of the pip we try to get (`pip` or `pip3`). `py` argument is used when trying to install built-in pip.'''
-    return __pip_installed(pip) or __pip_install0(py) or __pip_install1(py) or __pip_install2(py)
-
-
-def lib_install(name, user=False, py='python3', pip='pip3'):
-    '''Installs library using pip.
+def pip_install(py='python3', pip='pip3', silent=False):
+    '''Installs pip.
     Args:
-        user: If set, installs as a user ('--user' tag), globally otherwise.
-        py: Python executable. Some systems use 'python' for python2, 'python3' for 'python3', but this is not always the case.
-        pip: Python-pip executable. Some systems use `pip3` for python3-pip, others use `pip`.
+        py (optional str): Python executable. Some systems use 'python' for python2, 'python3' for 'python3', but this is not always the case.
+        pip (optional str): Python-pip executable. Some systems use `pip3` for python3-pip, others use `pip`.
 
     Returns:
-        pip_cmd returncode.'''
-    if not pip_install(py, pip):
+        `True` on success, `False` on failure.'''
+    return __pip_installed(pip, silent) or __pip_install0(py, silent) or __pip_install1(py, silent) or __pip_install2(py, silent)
+
+
+def lib_install(name, usermode=False, py='python3', pip='pip3', silent=False):
+    '''Installs library using pip.
+    Args:
+        name (str): Name of package/library to install.
+        usermode (optional bool): If set, installs in usermode ('--user' tag), globally otherwise.
+        py (optional str): Python executable. Some systems use 'python' for python2, 'python3' for 'python3', but this is not always the case.
+        pip (optional str): Python-pip executable. Some systems use `pip3` for python3-pip, others use `pip`.
+        silent (optional bool): If set, prints less verbose output.
+
+    Returns:
+        `True` on success, `False` on failure.'''
+    if not pip_install(py, pip, silent=silent):
         return False
     cmd = 'pip3 install {}'.format(name)
-    if user:
+    if usermode:
         cmd += ' --user'
-    return subprocess.call(cmd, shell=True)
+    kwargs = {'stderr': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL} if silent else {}
+    return subprocess.call(cmd, shell=True, **kwargs) == 0
