@@ -16,14 +16,16 @@ def _get_modules():
     import rados_deploy.cli.start as start
     import rados_deploy.cli.data.data as data
     import rados_deploy.cli.stop as stop
-    return [install, start, data, stop]
+    import rados_deploy.cli.uninstall as uninstall
+    return [install, start, data, stop, uninstall]
 
 
 def generic_args(parser):
     '''Configure arguments important for all modules (install, uninstall, start, stop) here.'''
     parser.add_argument('--install_dir', type=str, metavar='path', default='./deps/', help='Installation directory for rados-deploy, metareserve etc, for all remote machines. Note: The home directory of the remote machines is prepended to this path if it is relative.')
     parser.add_argument('--key-path', dest='key_path', type=str, default=None, help='Path to ssh key to access nodes.')
-
+    parser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that is/will be the Ceph admin node.')
+    
 
 def subparser(parser):
     '''Register subparser modules.'''

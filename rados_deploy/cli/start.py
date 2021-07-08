@@ -8,7 +8,6 @@ from rados_deploy.internal.util.printer import *
 def subparser(subparsers):
     '''Register subparser modules'''
     startparser = subparsers.add_parser('start', help='Start RADOS-Ceph on a cluster.')
-    startparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that will be the Ceph admin node.')
     startparser.add_argument('--mountpoint', metavar='path', type=str, default=defaults.mountpoint_path(), help='Mountpoint for CephFS on all nodes (default={}).'.format(defaults.mountpoint_path()))
     startparser.add_argument('--osd-op-threads', metavar='amount', dest='osd_op_threads', type=int, default=defaults.osd_op_threads(), help='Number of op threads to use for each OSD (default={}). Make sure this number is not greater than the amount of cores each OSD has.'.format(defaults.osd_op_threads()))
     startparser.add_argument('--osd-pool-size', metavar='amount', dest='osd_pool_size', type=int, default=defaults.osd_pool_size(), help='Fragmentation of objects across this number of OSDs (default={}).'.format(defaults.osd_pool_size()))

@@ -9,7 +9,6 @@ import rados_deploy.install as _install
 def subparser(subparsers):
     '''Register subparser modules'''
     installparser = subparsers.add_parser('install', help='Orchestrate RADOS-Ceph environment on server cluster.')
-    installparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the node that will be the Ceph admin node.')
     installparser.add_argument('--arrow-url', metavar='url', dest='arrow_url', type=str, default=defaults.arrow_url(), help='Arrow download URL. Defaults to Arrow with JNI bridge and RADOS-Ceph connector.')
     
     installparser.add_argument('--cores', metavar='amount', type=int, default=defaults.cores(), help='Amount of cores to use for compiling on remote nodes (default={}).'.format(defaults.cores()))

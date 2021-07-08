@@ -7,7 +7,6 @@ import rados_deploy.cli.util as _cli_util
 def subparser(subparsers):
     '''Register subparser modules'''
     stopparser = subparsers.add_parser('stop', help='Stop RADOS-Ceph on a cluster.')
-    stopparser.add_argument('--admin', metavar='id', dest='admin_id', type=int, default=None, help='ID of the Ceph admin node.')
     stopparser.add_argument('--mountpoint', metavar='path', type=str, default=start_defaults.mountpoint_path(), help='Mountpoint for CephFS on all nodes (default={}).'.format(start_defaults.mountpoint_path()))
     stopparser.add_argument('--silent', help='If set, less output is shown.', action='store_true')
     
