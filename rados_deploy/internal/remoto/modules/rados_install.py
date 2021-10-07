@@ -159,7 +159,7 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
             return False
         if not silent:
             print('Installing required libraries for RADOS-Ceph.\nPatience...')
-        cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk-headless openjdk-11-jdk-headless libboost-all-dev automake bison flex g++ libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y'
+        cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk openjdk-11-jdk libboost-all-dev automake bison flex g++ libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y'
         if subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
             printe('Failed to install all required libraries. Command used: {}'.format(cmd))
             return False
