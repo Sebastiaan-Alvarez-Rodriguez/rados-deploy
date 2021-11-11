@@ -12,7 +12,7 @@ def already_installed(privkey_sha256):
 
     Returns:
         `True` if the SSH keys are already installed.'''
-    home = os.path.expanduser('~/')
+    home = os.path.expanduser('~')
     keyfile = '{}/.ssh/rados_deploy.rsa'.format(home)
     if not isfile(keyfile):
         return False
@@ -41,7 +41,7 @@ def install_ssh_keys(hosts, keypair, user, use_sudo=True):
 
     Returns:
         `True` on success, `False` on failure.'''
-    home = os.path.expanduser('~/')
+    home = os.path.expanduser('~')
 
     mkdir('{}/.ssh'.format(home), exist_ok=True)
     if isfile('{}/.ssh/config'.format(home)):
@@ -50,6 +50,12 @@ def install_ssh_keys(hosts, keypair, user, use_sudo=True):
     else:
         hosts_available = []
     neededinfo = sorted(hosts)
+
+    local_ip = ''.join('''{0} {1}\n'''.format(x[3:].replace("-", "."), x) for x in neededinfo)
+    with open('{}/hosts'.format(home), mode='a') as f:
+        f.write('127.0.0.1 localhost\n')
+        f.write(local_ip)
+    subprocess.call('sudo cp {}/hosts /etc/hosts'.format(home),shell=True)
 
     config = ''.join('''
 Host {0}

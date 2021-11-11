@@ -127,7 +127,7 @@ def install_ceph(hosts_designations_mapping, silent=False):
         if not any(designations): # If no designation given for node X, we skip installation of Ceph for X.
             continue
         designation_out = '--'+' --'.join([x.lower() for x in set(designations)])
-        executors.append(Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, designation_out, hostname), shell=True))
+        executors.append(Executor('{} --overwrite-conf install --release octopus {} {}'.format(ceph_deploypath, designation_out, hostname), shell=True))           
     Executor.run_all(executors)
     return Executor.wait_all(executors, print_on_error=True)
 
@@ -167,8 +167,8 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
             prints('Installed required libraries.')
         if (not isdir(location)) and not _get_rados_dev(location, arrow_url, silent=silent, retries=5):
             return False
-        cmake_cmd = 'bash -c \'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ; source /users/Yuxuan/.bashrc ; export PATH=$PATH:$JAVA_HOME/bin ; /users/Yuxuan/deps/arrow/cpp ; cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON\''
-        #cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
+        # cmake_cmd = 'bash -c \'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ; export PATH=$PATH:$JAVA_HOME/bin ; cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON\''
+        cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
         if debug:
             cmake_cmd += ' -DCMAKE_BUILD_TYPE=Debug'
         print ("!!!! " + cmake_cmd + " !!!!!") 
