@@ -167,7 +167,7 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
             prints('Installed required libraries.')
         if (not isdir(location)) and not _get_rados_dev(location, arrow_url, silent=silent, retries=5):
             return False
-        # cmake_cmd = 'bash -c \'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ; export PATH=$PATH:$JAVA_HOME/bin ; cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON\''
+        
         cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
         if debug:
             cmake_cmd += ' -DCMAKE_BUILD_TYPE=Debug'
