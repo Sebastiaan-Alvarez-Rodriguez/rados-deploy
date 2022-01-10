@@ -3,12 +3,12 @@
 #Url: https://github.com/JayjeetAtGithub/skyhook-aws/blob/master/scripts/launch-vms.sh
 set -e
 
-count=2
-ami=ami-0fdf70ed5c34c5f52
-instance_type=m5ad.2xlarge
-security_group_ids=sg-04c41bc658406a187
-subnet_id=subnet-0e67a4762ad1c5e8c
-key_name=yuxuan
+count=7
+ami=ami-0d527b8c289b4af7f
+instance_type=c5d.12xlarge
+security_group_ids=sg-0e872cb135d3da2e0
+subnet_id=subnet-c541d289
+key_name=yuxuan_frankfurt
 chmod 400 "${key_name}.pem"
 
 spawn_ec2_instances() {
