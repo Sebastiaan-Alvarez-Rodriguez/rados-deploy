@@ -141,8 +141,9 @@ def start_osd_bluestore(ceph_deploypath, osd, num_osds, silent):
 
     Returns:
         `True` on success, `False` on failure.'''
-    executors = [Executor('{} -q osd create --data {} {}'.format(ceph_deploypath, osd.extra_info['device_path'].split(',')[x], osd.hostname), **get_subprocess_kwargs(silent)) for x in range(num_osds)]
-    Executor.run_all(executors)
+    # executors = [Executor('{} -q osd create --data {} {}'.format(ceph_deploypath, osd.extra_info['device_path'].split(',')[x], osd.hostname), **get_subprocess_kwargs(silent)) for x in range(num_osds)]
+    executors = [Executor('ssh {} "yes | sudo ceph-volume lvm batch --osds-per-device {} {}"'.format(osd.hostname, num_osds, osd.extra_info['device_path']), **get_subprocess_kwargs(silent))]
+    Executor.run_all(executors) 
     return Executor.wait_all(executors, print_on_error=True)
 
 
