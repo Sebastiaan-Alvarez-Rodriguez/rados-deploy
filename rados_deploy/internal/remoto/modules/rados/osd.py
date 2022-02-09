@@ -11,7 +11,7 @@ Requires:
 
 def stop_osds_memstore(osds, silent):
     '''Completely stops and removes all old running OSDs. Does not return anything.
-    Warning: First, CephFS must be stopped, and seconfly, the Ceph pools must removed, before calling this function.'''
+    Warning: First, CephFS must be stopped, and secondly, the Ceph pools must removed, before calling this function.'''
 
 
     # stopping osds

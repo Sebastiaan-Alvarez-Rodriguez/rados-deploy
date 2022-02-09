@@ -21,15 +21,17 @@ def _pick_admin(reservation, admin=None):
         return tmp[0], tmp[1:]
 
 
-def _compute_placement_groups(num_osds=None, reservation=None, num_pools=3):
+def _compute_placement_groups(num_osds=None, reservation=None, num_pools=3, mon_max_pg_per_osd=250):
     if num_osds == None and reservation == None:
         raise ValueError('Either need number of osds or reservation for computing placement groups.')
     if not num_osds:
         num_osds = counted_total_osds = sum([sum(1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()) for x in reservation.nodes if 'designations' in x.extra_info])
-    num_pgs = (num_osds * 100) / num_pools
+    
+    max_pgs = mon_max_pg_per_osd * num_pools
+    num_pgs = min((num_osds * 100) / num_pools, max_pgs)
 
     pow2_pg = 2**(math.ceil(num_pgs/2)-1).bit_length()
 
-    if pow2_pg < num_pgs/4*3: # We are more than 25% away from our target, pick larger PG number
+    if pow2_pg < num_pgs/4*3 and pow2_pg*2 <= max_pgs: # We are more than 25% away from our target, pick larger PG number
         pow2_pg *= 2
     return pow2_pg
