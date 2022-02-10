@@ -43,13 +43,13 @@ def start_cephfs(node, connection, ceph_deploypath, path='/mnt/cephfs', use_clie
 
     import time
     for x in range(retries):
-        _, _, exitcode = remoto.process.check(connection, 'sudo {} {}'.format(cmd, path), shell=True)
+        out, err, exitcode = remoto.process.check(connection, 'sudo {} {}'.format(cmd, path), shell=True)
         if exitcode == 0:
             prints('[{}] Succesfully called ceph-fuse (attempt {}/{}) (I/O caching={})'.format(node.hostname, x+1, retries, 'true' if use_client_cache else 'false'))    
             state_ok = True
             break
         else:
-            printw('[{}] Executing ceph-fuse... (attempt {}/{})'.format(node.hostname, x+1, retries))
+            printw('[{}] Executing ceph-fuse... (attempt {}/{})\n output: {}\n error: {}'.format(node.hostname, x+1, retries, out, err))
         time.sleep(1)
     if not state_ok:
         return False
