@@ -106,7 +106,7 @@ def _merge_kwargs(x, y):
     return z
 
 
-def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, osd_max_obj_size, placement_groups, use_client_cache, silent, retries):
+def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_pool_size, osd_max_obj_size, placement_groups, use_client_cache, use_ceph_volume, silent, retries):
     '''Starts a Ceph cluster with RADOS-Arrow support.
     Args:
         reservation_str (str): String representation of a `metareserve.reservation.Reservation`. 
@@ -119,6 +119,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         osd_max_obj_size (int): Maximal object size in bytes. Normal=128*1024*1024 (128MB).
         placement_groups (int): Amount of placement groups in Ceph.
         use_client_cache (bool): Toggles using cephFS I/O cache.
+        use_ceph_volume (bool): If set, uses 'ceph-volume' instead of 'osd create'
         silent (bool): If set, prints are less verbose.
         retries (int): Number of retries for potentially failing operations.
 
@@ -223,7 +224,7 @@ def start_rados_bluestore(reservation_str, mountpoint_path, osd_op_threads, osd_
         futures_start_osds = []
         for x in osds:
             num_osds = len([1 for y in x.extra_info['designations'].split(',') if y == Designation.OSD.name.lower()])
-            futures_start_osds.append(executor.submit(start_osd_bluestore, ceph_deploypath, x, num_osds, silent))
+            futures_start_osds.append(executor.submit(start_osd_bluestore, ceph_deploypath, x, num_osds, silent, use_ceph_volume))
         if not all(x.result() for x in futures_start_osds):
             close_wrappers(connectionwrappers)
             return False
