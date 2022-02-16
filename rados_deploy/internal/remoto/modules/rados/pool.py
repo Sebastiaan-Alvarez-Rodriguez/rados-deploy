@@ -17,8 +17,8 @@ def destroy_pools(silent):
 def create_pools(placement_groups, silent):
     '''Create ceph pools.'''
     try:
-        subprocess.check_call('sudo ceph osd pool create cephfs_data {}'.format(placement_groups), **get_subprocess_kwargs(silent))
-        subprocess.check_call('sudo ceph osd pool create cephfs_metadata {}'.format(placement_groups), **get_subprocess_kwargs(silent))
+        subprocess.check_call('sudo ceph osd pool create cephfs_data {0} {0}'.format(placement_groups), **get_subprocess_kwargs(silent))
+        subprocess.check_call('sudo ceph osd pool create cephfs_metadata {0} {0}'.format(placement_groups), **get_subprocess_kwargs(silent))
         subprocess.check_call('sudo ceph osd pool set cephfs_data pg_autoscale_mode off', **get_subprocess_kwargs(silent))
         subprocess.check_call('sudo ceph fs new cephfs cephfs_metadata cephfs_data', **get_subprocess_kwargs(silent))
         return True

@@ -53,9 +53,10 @@ def install_ssh_keys(hosts, keypair, user, use_sudo=True):
 
     local_ip = ''.join('''{0} {1}\n'''.format(x[3:].replace("-", "."), x) for x in neededinfo)
     with open('{}/hosts'.format(home), mode='a') as f:
-        f.write('127.0.0.1 localhost\n')
+        # f.write('127.0.0.1 localhost\n')
         f.write(local_ip)
-    subprocess.call('sudo cp {}/hosts /etc/hosts'.format(home),shell=True)
+    # subprocess.call('sudo cp {}/hosts /etc/hosts'.format(home),shell=True)
+    subprocess.call('sudo cat {}/hosts >> /etc/hosts'.format(home),shell=True)
 
     # if subprocess.call('sudo vgcreate --force --yes "ceph" "/dev/nvme1n1"',shell=True) != 0:
     #     return False

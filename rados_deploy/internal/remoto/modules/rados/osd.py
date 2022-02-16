@@ -11,7 +11,7 @@ Requires:
 
 def stop_osds_memstore(osds, silent):
     '''Completely stops and removes all old running OSDs. Does not return anything.
-    Warning: First, CephFS must be stopped, and seconfly, the Ceph pools must removed, before calling this function.'''
+    Warning: First, CephFS must be stopped, and secondly, the Ceph pools must removed, before calling this function.'''
 
 
     # stopping osds
@@ -130,7 +130,7 @@ def start_osd_memstore(osd, connection, num_osds, silent):
         return all(x.result() for x in futures)
 
 
-def start_osd_bluestore(ceph_deploypath, osd, num_osds, silent):
+def start_osd_bluestore(ceph_deploypath, osd, num_osds, silent, use_ceph_volume):
     '''Starts a Ceph OSD for bluestore clusters.
     Requires that a key "device_path" is set in the extra_info of the node, which points to a device that will serve as data storage location.
     Args:
@@ -138,11 +138,14 @@ def start_osd_bluestore(ceph_deploypath, osd, num_osds, silent):
         osd (metareserve.Node): Node to start OSD daemon on.
         num_osds (int): Amount of OSD daemons to spawn on local device.
         silent: If set, suppresses debug output.
+        use_ceph_volume: If set, uses 'ceph-volume' instead of 'osd create'
 
     Returns:
         `True` on success, `False` on failure.'''
-    # executors = [Executor('{} -q osd create --data {} {}'.format(ceph_deploypath, osd.extra_info['device_path'].split(',')[x], osd.hostname), **get_subprocess_kwargs(silent)) for x in range(num_osds)]
-    executors = [Executor('ssh {} "yes | sudo ceph-volume lvm batch --osds-per-device {} {}"'.format(osd.hostname, num_osds, osd.extra_info['device_path'].split(',')[x]), **get_subprocess_kwargs(silent)) for x in range(len(osd.extra_info['device_path'].split(',')))]
+    if use_ceph_volume:
+        executors = [Executor('ssh {} "sudo ceph-volume lvm batch --yes --no-auto --osds-per-device {} {}"'.format(osd.hostname, num_osds, osd.extra_info['device_path'].split(',')[x]), **get_subprocess_kwargs(silent)) for x in range(len(osd.extra_info['device_path'].split(',')))]
+    else:
+        executors = [Executor('{} -q osd create --data {} {}'.format(ceph_deploypath, osd.extra_info['device_path'].split(',')[x], osd.hostname), **get_subprocess_kwargs(silent)) for x in range(num_osds)]
     Executor.run_all(executors) 
     return Executor.wait_all(executors, print_on_error=True)
 

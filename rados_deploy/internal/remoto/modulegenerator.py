@@ -71,6 +71,7 @@ class ModuleGenerator(object):
     def _is_regular_python(self, name):
         if not self._stl_modules_cache:
             self._stl_modules_cache = list(_generate_stl_libs())
+            self._stl_modules_cache.append('time') # so we are able to import time
         return name in self._stl_modules_cache
 
 
