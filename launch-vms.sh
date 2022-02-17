@@ -5,7 +5,7 @@ set -e
 
 count=7
 ami=ami-0d527b8c289b4af7f
-instance_type=c5d.12xlarge
+instance_type=c5d.4xlarge
 security_group_ids=sg-0e872cb135d3da2e0
 subnet_id=subnet-c541d289
 key_name=yuxuan_frankfurt
