@@ -1,5 +1,6 @@
 import argparse
 import concurrent.futures
+from distutils.log import error
 import itertools
 from multiprocessing import cpu_count
 import os
@@ -86,7 +87,7 @@ exit(0 if all(results) else 1)
 
 
 def _post_deploy_remote_file(connection, stripe, copies_amount, links_amount, source_file, dest_file):
-    if copies_amount > -1:
+    if copies_amount > 0:
         cmd = '''python3 -c "
 import subprocess
 import concurrent.futures
@@ -97,17 +98,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executo
 exit(0 if all(results) else 1)
 "
 '''.format(dest_file, copies_amount)
-#     if copies_amount > 0:
-#         cmd = '''python3 -c "
-# import subprocess
-# import concurrent.futures
-# from multiprocessing import cpu_count
-# with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()-1) as executor:
-#     futures_rsync = [executor.submit(subprocess.call, 'ssh -F {} ubuntu@{} "wget -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/jayjeet_128mb.pq"), shell=True)]
-#     results = [x.result() == 0 for x in futures_rsync]
-# exit(0 if all(results) else 1)
-# "
-# '''
         _, _, exitcode = remoto.process.check(connection, cmd, shell=True)
         if exitcode != 0:
             printe('Could not inflate dataset using {} copies of file at cluster: {}. Is there enough space?'.format(copies_amount, dest_file))
@@ -168,8 +158,40 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not state_ok:
             return False
 
+        # Method 1:
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo touch /mnt/cephfs/test.pq', shell=True)
+        if exitcode != 0:
+            printe('sudo touch /mnt/cephfs/test.pq failed')
+            return False
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo setfattr --no-dereference -n ceph.file.layout.object_size -v 134217728 /mnt/cephfs/test.pq', shell=True)
+        if exitcode != 0:
+            printe('setfattr failed')
+            return False
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo rsync --ignore-missing-args --inplace /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq', shell=True)
+        # _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo cp /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq', shell=True)
+        if exitcode != 0:
+            printe('cp failed')
+            return False
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo rm -f /mnt/cephfs/jayjeet_128mb.pq', shell=True)
+        if exitcode != 0:
+            printe('rm failed')
+            return False
+        # Method 2:
+        # if subprocess.call('ssh -F {} ubuntu@{} "sudo touch /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
+        #     printe('touch')
+        #     return False
+        # if subprocess.call('ssh -F {} ubuntu@{} "sudo setfattr --no-dereference -n ceph.file.layout.object_size -v 134217728 /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
+        #     printe('setfattr')
+        #     return False
+        # if subprocess.call('ssh -F {} ubuntu@{} "sudo cp /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
+        #     printe('cp')
+        #     return False
+        # if subprocess.call('ssh -F {} ubuntu@{} "sudo rm -f /mnt/cephfs/jayjeet_128mb.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
+        #     printe('rm')
+        #     return False
+
+
         futures_post_deploy = [executor.submit(_post_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
-        # if all(x.result() for x in futures_pre_deploy):
         if all(x.result() for x in futures_post_deploy):
             prints('Data deployment success')
             return True
