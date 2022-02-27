@@ -1,6 +1,5 @@
 import argparse
 import concurrent.futures
-from distutils.log import error
 import itertools
 from multiprocessing import cpu_count
 import os
@@ -137,17 +136,16 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
                             printe('File {} is too large ({} bytes, max allowed is {} bytes)'.format(x, os.path.getsize(x), max_filesize))
                         return False
                     files_to_deploy += [(x, fs.join(dest, x[path_len+1:])) for x in files]
-        futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
-        if not all(x.result() for x in futures_pre_deploy):
-            printe('Pre-data deployment error occured.')
-            return False
+        # futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
+        # if not all(x.result() for x in futures_pre_deploy):
+        #     printe('Pre-data deployment error occured.')
+        #     return False
 
         if not silent:
             print('Transferring data...')
         # fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAXL --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
         fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "wget -q -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/jayjeet_128mb.pq"), shell=True) == 0
         futures_rsync = {path: executor.submit(fun, path) for path in paths}
-
         state_ok = True
         for path,future in futures_rsync.items():
             if not silent:
@@ -158,36 +156,17 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not state_ok:
             return False
 
+        futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
+        if not all(x.result() for x in futures_pre_deploy):
+            printe('Pre-data deployment error occured.')
+            return False
+
         # Method 1:
-        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo touch /mnt/cephfs/test.pq', shell=True)
-        if exitcode != 0:
-            printe('sudo touch /mnt/cephfs/test.pq failed')
-            return False
-        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo setfattr --no-dereference -n ceph.file.layout.object_size -v 134217728 /mnt/cephfs/test.pq', shell=True)
-        if exitcode != 0:
-            printe('setfattr failed')
-            return False
-        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo rsync --ignore-missing-args --inplace /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq', shell=True)
-        # _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo cp /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq', shell=True)
-        if exitcode != 0:
-            printe('cp failed')
-            return False
-        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo rm -f /mnt/cephfs/jayjeet_128mb.pq', shell=True)
-        if exitcode != 0:
-            printe('rm failed')
-            return False
+        # _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'UNIX Command', shell=True)
+        # if exitcode != 0:
+        #     return False
         # Method 2:
-        # if subprocess.call('ssh -F {} ubuntu@{} "sudo touch /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
-        #     printe('touch')
-        #     return False
-        # if subprocess.call('ssh -F {} ubuntu@{} "sudo setfattr --no-dereference -n ceph.file.layout.object_size -v 134217728 /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
-        #     printe('setfattr')
-        #     return False
-        # if subprocess.call('ssh -F {} ubuntu@{} "sudo cp /mnt/cephfs/jayjeet_128mb.pq /mnt/cephfs/test.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
-        #     printe('cp')
-        #     return False
-        # if subprocess.call('ssh -F {} ubuntu@{} "sudo rm -f /mnt/cephfs/jayjeet_128mb.pq"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
-        #     printe('rm')
+        # if subprocess.call('ssh -F {} ubuntu@{} "UNIX Command"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public), shell=True) != 0:
         #     return False
 
 
