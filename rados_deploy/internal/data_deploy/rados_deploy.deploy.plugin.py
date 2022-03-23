@@ -1,9 +1,11 @@
 import argparse
 import concurrent.futures
+from concurrent.futures import process
 import itertools
 from multiprocessing import cpu_count
 import os
 import subprocess
+from tabnanny import check
 
 import data_deploy.shared.copy
 import data_deploy.shared.link
@@ -50,6 +52,12 @@ def _ensure_attr(connection):
         out, err, exitcode = remoto.process.check(connection, 'sudo apt install attr -y', shell=True)
         if exitcode != 0:
             printe('Could not install "attr" package (needed for "setfattr" command). Exitcode={}.\nOut={}\nErr={}'.format(exitcode, out, err))
+            return False
+    _, _, exitcode = remoto.process.check(connection, 'which unzip', shell=True)
+    if exitcode != 0:
+        out, err, exitcode = remoto.process.check(connection, 'sudo apt install unzip -y', shell=True)
+        if exitcode != 0:
+            printe('Could not install "unzip" package. Exitcode={}.\nOut={}\nErr={}'.format(exitcode, out, err))
             return False
     return True
 
@@ -144,7 +152,7 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not silent:
             print('Transferring data...')
         # fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAXL --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
-        fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "wget -q -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/jayjeet_128mb.pq"), shell=True) == 0
+        fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "wget -q -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/parquet.zip"), shell=True) == 0
         futures_rsync = {path: executor.submit(fun, path) for path in paths}
         state_ok = True
         for path,future in futures_rsync.items():
@@ -154,6 +162,11 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
                 state_ok = False
                 printe('Could not transfer file: {}'.format(path))
         if not state_ok:
+            return False
+
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo unzip -j /mnt/cephfs/parquet.zip -d /mnt/cephfs/ && rm /mnt/cephfs/parquet.zip', shell=True)
+        if exitcode != 0:
+            printe('Unzip failed')
             return False
 
         futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
