@@ -152,7 +152,7 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not silent:
             print('Transferring data...')
         # fun = lambda path: subprocess.call('rsync -e "ssh -F {}" -q -aHAXL --inplace {} {}:{}'.format(connectionwrapper.ssh_config.name, path, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
-        fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "wget -q -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/parquet.zip"), shell=True) == 0
+        fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "wget -q -P {} {}"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path)), "https://ceph-dataset.s3.eu-central-1.amazonaws.com/tpcds-1T.zip"), shell=True) == 0
         futures_rsync = {path: executor.submit(fun, path) for path in paths}
         state_ok = True
         for path,future in futures_rsync.items():
@@ -164,7 +164,7 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not state_ok:
             return False
 
-        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo unzip -j /mnt/cephfs/parquet.zip -d /mnt/cephfs/ && rm /mnt/cephfs/parquet.zip', shell=True)
+        _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'sudo unzip -j /mnt/cephfs/tpcds-1T.zip -d /mnt/cephfs/ && rm /mnt/cephfs/tpcds-1T.zip', shell=True)
         if exitcode != 0:
             printe('Unzip failed')
             return False
