@@ -53,10 +53,15 @@ def _ensure_attr(connection):
         if exitcode != 0:
             printe('Could not install "attr" package (needed for "setfattr" command). Exitcode={}.\nOut={}\nErr={}'.format(exitcode, out, err))
             return False
+    with open ('/home/yzhao/aws_credential.txt') as f:
+        credential = f.readline()
+    access_key_id = credential.split(',')[0]
+    secret_access_key = credential.split(',')[1]
+    region = credential.split(',')[2]
     _, _, exitcode = remoto.process.check(connection, 'which awscli', shell=True)
     if exitcode != 0:
-        out, err, exitcode = remoto.process.check(connection, 'sudo apt install awscli -y && aws configure set aws_access_key_id default_access_key_id \
-        && aws configure set aws_secret_access_key default_aws_secret_access_key && aws configure set default.region region', shell=True)
+        out, err, exitcode = remoto.process.check(connection, 'sudo apt install awscli -y && aws configure set aws_access_key_id {} && \
+        aws configure set aws_secret_access_key {} && aws configure set default.region {}'.format(access_key_id, secret_access_key, region), shell=True)
         if exitcode != 0:
             printe('Could not install "awscli" package. Exitcode={}.\nOut={}\nErr={}'.format(exitcode, out, err))
             return False
