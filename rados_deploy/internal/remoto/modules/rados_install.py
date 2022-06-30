@@ -159,7 +159,9 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
             return False
         if not silent:
             print('Installing required libraries for RADOS-Ceph.\nPatience...')
-        cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk openjdk-11-jdk default-jdk libboost-all-dev automake bison flex g++ libevent-dev libssl-dev libtool make pkg-config maven cmake thrift-compiler -y'
+        # cmd = 'sudo apt install libradospp-dev rados-objclass-dev openjdk-8-jdk openjdk-11-jdk default-jdk libboost-all-dev automake bison flex g++ libevent-dev libssl-dev \
+        #     libtool make pkg-config maven cmake thrift-compiler llvm -y'
+        cmd = 'sudo apt install -y python3 python3-pip python3-venv python3-numpy cmake libradospp-dev rados-objclass-dev llvm default-jdk maven'
         if subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL) != 0:
             printe('Failed to install all required libraries. Command used: {}'.format(cmd))
             return False
@@ -168,7 +170,8 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
         if (not isdir(location)) and not _get_rados_dev(location, arrow_url, silent=silent, retries=5):
             return False
         
-        cmake_cmd = 'cmake . -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JNI=ON -DARROW_ORC=ON -DARROW_CSV=ON -DARROW_CLS=ON'
+        cmake_cmd = 'cmake -DARROW_SKYHOOK=ON -DARROW_PARQUET=ON -DARROW_WITH_SNAPPY=ON -DARROW_WITH_ZLIB=ON -DARROW_BUILD_EXAMPLES=ON -DPARQUET_BUILD_EXAMPLES=ON \
+            -DARROW_PYTHON=ON -DARROW_ORC=ON -DARROW_JAVA=ON -DARROW_JNI=ON -DARROW_DATASET=ON -DARROW_CSV=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_ZSTD=ON'
         if debug:
             cmake_cmd += ' -DCMAKE_BUILD_TYPE=Debug'
         print ("!!!! " + cmake_cmd + " !!!!!") 
@@ -200,6 +203,7 @@ def install_rados(location, hosts_designations_mapping, arrow_url, force_reinsta
     executors = [Executor('ssh {} "sudo cp ~/.arrow-libs/libcls* /usr/lib/rados-classes/"'.format(x), **kwargs) for x in hosts]
     executors += [Executor('ssh {} "sudo cp ~/.arrow-libs/libarrow* /usr/lib/"'.format(x), **kwargs) for x in hosts]
     executors += [Executor('ssh {} "sudo cp ~/.arrow-libs/libparquet* /usr/lib/"'.format(x), **kwargs) for x in hosts]
+    executors += [Executor('ssh {} "sudo systemctl restart ceph-osd.target"'.format(x), **kwargs) for x in hosts]
     
     Executor.run_all(executors)
     if not Executor.wait_all(executors, print_on_error=True):

@@ -153,6 +153,12 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
 
         if not silent:
             print('Transferring data...')
+
+        futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
+        if not all(x.result() for x in futures_pre_deploy):
+            printe('Pre-data deployment error occured.')
+            return False
+                
         fun = lambda path: subprocess.call('ssh -F {} ubuntu@{} "cd {} && aws s3 sync s3://ceph-dataset/tpcds-1t-split/ ./"'.format(connectionwrapper.ssh_config.name, admin_node.ip_public, fs.join(dest, fs.basename(path))), shell=True) == 0
         futures_rsync = {path: executor.submit(fun, path) for path in paths}
         state_ok = True
@@ -165,10 +171,10 @@ def _execute_internal(connectionwrapper, reservation, paths, dest, silent, copy_
         if not state_ok:
             return False
 
-        futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
-        if not all(x.result() for x in futures_pre_deploy):
-            printe('Pre-data deployment error occured.')
-            return False
+        # futures_pre_deploy = [executor.submit(_pre_deploy_remote_file, connectionwrapper.connection, stripe, copies_to_add, links_to_add, source_file, dest_file) for (source_file, dest_file) in files_to_deploy]
+        # if not all(x.result() for x in futures_pre_deploy):
+        #     printe('Pre-data deployment error occured.')
+        #     return False
 
         # Method 1:
         # _, _, exitcode = remoto.process.check(connectionwrapper.connection, 'UNIX Command', shell=True)
